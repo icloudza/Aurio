@@ -11,6 +11,10 @@ let package = Package(
         .executable(name: "Aurio", targets: ["Aurio"]),
         .executable(name: "aurio-rx", targets: ["aurio-rx"]),
     ],
+    dependencies: [
+        // 在线更新（固定版本，升级时改这里并更新 Package.resolved）
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
+    ],
     targets: [
         // Rust 核心库的 C 接口
         .target(
@@ -41,11 +45,13 @@ let package = Package(
         // 菜单栏 App
         .executableTarget(
             name: "Aurio",
-            dependencies: ["AurioKit"],
+            dependencies: ["AurioKit", .product(name: "Sparkle", package: "Sparkle")],
             path: "Sources/Aurio",
             linkerSettings: [
                 .linkedFramework("SwiftUI"),
                 .linkedFramework("ServiceManagement"),
+                // Sparkle.framework 放在 Aurio.app/Contents/Frameworks（scripts/build-mac-app.sh 负责拷贝和签名）
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"]),
             ]
         ),
     ]

@@ -58,6 +58,11 @@ crates/aurio-core/src/
   sim.rs         离线仿真
   stats.rs、rt.rs、wav.rs
 crates/aurio-ffi/          C 接口，头文件 include/aurio.h
+crates/aurio-update/src/
+  lib.rs         更新清单格式、版本比较、镜像地址、Ed25519 签名与验签（不依赖操作系统）
+  client.rs      取清单、带回退和续传的下载（client 功能，Windows 端使用）
+crates/aurio-tools/src/bin/
+  aurio-sign.rs  生成更新签名密钥、签名文件、生成发布用的 latest.json 和 appcast.xml
 crates/aurio-win/src/win/
   capture.rs     WASAPI 回环采集与静音补包
   mic.rs         麦克风接收、写入 CABLE Input、心跳与录音检测
@@ -68,12 +73,14 @@ crates/aurio-win/src/win/
   discover.rs    mDNS 发现
   echotest.rs    录音回放测试
   theme.rs       任务栏浅色 / 深色检测
+  update.rs      在线更新：状态、下载、更新助手（静默安装后重新打开）
 apps/win-tauri/
   src/main.rs    Tauri 命令、托盘、窗口生命周期、驱动辅助进程入口
   ui/index.html  界面（单文件，无构建步骤）
 mac/AurioMac/Sources/
   AurioKit/      AurioEngine（引擎与状态）、HALOutput / HALInput、VoiceIO（回声消除）、Devices
-  Aurio/         菜单栏 App：AurioApp（入口、设置、菜单栏图标）、MenuView（面板）、Components（控件）
+  Aurio/         菜单栏 App：AurioApp（入口、设置、菜单栏图标）、MenuView（面板）、Components（控件）、
+                 UpdateController（Sparkle 在线更新与镜像选择）
   aurio-rx/      命令行版
 ```
 
@@ -84,6 +91,14 @@ mac/AurioMac/Sources/
 ```bash
 cargo test --release -p aurio-core
 ```
+
+**在线更新**：签名、清单，以及模拟各种镜像故障的下载测试。
+
+```bash
+cargo test --release -p aurio-update --features client
+```
+
+测试时可以用环境变量 `AURIO_UPDATE_MIRRORS` 替换 Windows 端的镜像列表（逗号分隔；本机地址允许 http）。
 
 **离线仿真**：模拟发送端时钟偏差、采集周期、抖动和丢包，几秒钟就能跑完 24 小时。
 

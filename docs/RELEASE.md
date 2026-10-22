@@ -9,6 +9,8 @@ Aurio 用 GitHub Actions 自动打包两端，工作流是 [`.github/workflows/r
 | `Aurio-<版本>.dmg` | macOS | 安装盘：打开后把 Aurio 拖到「应用程序」。App 和安装盘都经过 Developer ID 签名和苹果公证，并装订了公证票据 |
 | `Aurio-Setup-<版本>.exe` | Windows | 安装包（NSIS） |
 | `Aurio-<版本>-Windows.zip` | Windows | 免安装版 |
+| `latest.json`、`latest.json.sig` | Windows | 签名的更新清单，已安装的 Aurio 据此检查和下载新版本 |
+| `appcast.xml` | macOS | Sparkle 的更新清单 |
 | `SHA256SUMS.txt` | — | 以上文件的 SHA-256 校验和 |
 
 macOS 版目前只编译 Apple Silicon（arm64）。
@@ -26,7 +28,9 @@ macOS 版目前只编译 Apple Silicon（arm64）。
 2. **核心库测试**：`cargo test --release -p aurio-core`。
 3. **Windows**：在 Ubuntu 上用 MinGW 交叉编译，运行 `scripts/build-win.sh`，和本地打包的工具链相同。
 4. **macOS**：在 macOS 上导入签名证书到临时钥匙串，运行 `scripts/build-mac-dmg.sh`：编译签名 App → 公证并装订 App → 生成 DMG → 签名 DMG → 公证并装订 DMG。结束后删除临时钥匙串和密钥文件。
-5. **发布**：生成校验和，从 [CHANGELOG.md](../CHANGELOG.md) 提取本版本的说明，创建 Release 草稿。确认无误后，在 GitHub 网页上手动点「Publish release」。
+5. **发布**：从 [CHANGELOG.md](../CHANGELOG.md) 提取本版本的说明，用 `aurio-sign` 给两个安装包签名并生成更新清单，生成校验和，创建 Release 草稿。确认无误后，在 GitHub 网页上手动点「Publish release」。
+
+**草稿和预发布版本不会推送给用户。** 在线更新读取的是 `releases/latest/download/…`，GitHub 只把已发布、且不是预发布的最新版本算作 latest。点「Publish release」之后，已安装的 Aurio 才能检查到这个版本。
 
 ## 3. 配置 Secrets（只需一次）
 
@@ -39,12 +43,15 @@ macOS 签名和公证需要以下 Secrets。没有配置时，macOS 版仍会打
 | `APPLE_API_KEY_P8` | App Store Connect API 密钥文件（`AuthKey_XXXXXXXXXX.p8`）的内容 |
 | `APPLE_API_KEY_ID` | 密钥 ID（文件名里 `AuthKey_` 后面那串） |
 | `APPLE_API_ISSUER_ID` | Issuer ID：App Store Connect →「用户和访问」→「集成」→「App Store Connect API」页面顶部 |
+| `UPDATE_SIGNING_KEY` | 在线更新的 Ed25519 签名私钥（base64）。没有配置时 CI 不生成更新清单，已安装的 Aurio 收不到这次更新 |
 
 用脚本一次配置（需要已登录的 `gh`，并且仓库已经推送到 GitHub）：
 
 ```bash
-./scripts/setup-ci-secrets.sh <证书.p12> <AuthKey_XXXXXXXXXX.p8>
+./scripts/setup-ci-secrets.sh <证书.p12> <AuthKey_XXXXXXXXXX.p8> [更新签名私钥]
 ```
+
+更新签名私钥默认读取 `~/.config/aurio/update_signing.key`。写入前，脚本会核对这把私钥和程序内置的公钥是否配对。
 
 脚本会提示输入证书密码和 Issuer ID（不回显、不落盘）。它会先在临时钥匙串里验证密码是否正确、证书里是否有 Developer ID Application 身份，再写入 Secrets。
 
@@ -52,7 +59,14 @@ macOS 签名和公证需要以下 Secrets。没有配置时，macOS 版仍会打
 - **证书**：在「钥匙串访问」中找到「Developer ID Application: …」，展开后连同私钥一起选中，右键「导出」为 `.p12`，并设置密码。
 - **API 密钥**：App Store Connect →「用户和访问」→「集成」→「App Store Connect API」，新建一个「开发者」权限的密钥，下载 `.p8` 文件（只能下载一次）。
 
-请妥善保管 `.p12` 和 `.p8` 文件，不要提交到仓库。
+- **更新签名密钥**：用 `./target/release/aurio-sign keygen ~/.config/aurio/update_signing.key` 生成（需先 `cargo build --release -p aurio-tools`），私钥写入文件，终端打印的公钥要内置到两端程序里（见下文「更换密钥」）。仓库里内置的公钥对应发布者手里的那把私钥。
+
+请妥善保管 `.p12`、`.p8` 和更新签名私钥，不要提交到仓库（`.gitignore` 已经屏蔽了 `*.p12`、`*.p8`）。
+
+### 更新签名密钥
+
+- **一定要备份私钥。** 私钥丢失后，已安装的 Aurio 无法再验证任何新版本，只能让用户手动下载安装一个内置了新公钥的版本。
+- **更换密钥**：用 `aurio-sign keygen <新路径>` 生成新密钥对，把公钥同时写进 `crates/aurio-update/src/lib.rs` 的 `PUBLIC_KEY` 和 `mac/AurioMac/App/Info.plist` 的 `SUPublicEDKey`，再更新 Secret。注意：旧版本的用户必须先装上一个用旧私钥签名的过渡版本，才能收到之后用新私钥签名的版本。
 
 ## 4. 发布一个版本
 
@@ -82,3 +96,18 @@ macOS 签名和公证需要以下 Secrets。没有配置时，macOS 版仍会打
 | `./scripts/build-win.sh` | Windows 安装包和免安装版 |
 
 DMG 的窗口布局在 `installer/dmg-settings.py`，背景图由 `scripts/make-dmg-background.py` 生成到 `assets/dmg/`。两者的图标位置需要保持一致。
+
+本地也可以生成更新清单（和 CI 相同）：
+
+```bash
+./target/release/aurio-sign release --key-file ~/.config/aurio/update_signing.key --version 0.2.7 --notes notes.md --windows dist/Aurio-Setup-0.2.7.exe --macos dist/Aurio-0.2.7.dmg --out dist
+```
+
+## 6. 维护镜像列表
+
+公益镜像随时可能失效。内置列表在两处，需要同时修改：
+
+- `crates/aurio-update/src/lib.rs` 的 `DEFAULT_MIRRORS`（Windows）
+- `mac/AurioMac/Sources/Aurio/UpdateController.swift` 的 `mirrors`（macOS）
+
+修改只对之后发布的版本生效。所有镜像都失效时，两端会自动回退到 GitHub 官方，不影响更新，只是在国内可能较慢。如果需要更稳定的国内速度，可以在 CI 中把安装包同步到自己的国内对象存储，再把地址加进镜像列表。

@@ -1,0 +1,17 @@
+[package]
+name = "aurio-update"
+version.workspace = true
+edition.workspace = true
+description = "在线更新的公共部分：版本清单、版本比较、镜像地址、Ed25519 签名与验签"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
+base64 = "0.22"
+sha2 = "0.10"
+reqwest = { version = "0.13", optional = true, default-features = false, features = ["blocking", "native-tls", "system-proxy", "http2"] }
+
+[features]
+# 下载端（取清单、带回退的下载）
+client = ["dep:reqwest"]

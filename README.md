@@ -5,6 +5,7 @@ Aurio 让 Windows 电脑通过局域网，把 Mac 上的 Studio Display（或任
 - **播放**：Windows 的系统声音实时传到 Mac，从 Studio Display 播放。
 - **麦克风**：Studio Display 的麦克风传回 Windows，任何应用都可以把它当普通麦克风使用。
 - **回声消除**：可选。外放时开麦，对方听不到扬声器里的声音。
+- **在线更新**：两端自动检查新版本，下载先走国内加速镜像、失败再走 GitHub 官方，每个安装包都校验数字签名。
 - **低延迟、不漂移**：有线局域网下端到端约 35–45 ms，其中 22 ms 是 Studio Display 自身的硬件延迟。两台电脑的时钟偏差会被持续校正，长时间播放不会积累延迟或爆音。
 
 当前版本：**0.2.6**（[更新记录](CHANGELOG.md)）
@@ -47,7 +48,8 @@ crates/
   aurio-core/    两端共用的核心库：协议、抖动缓冲、漂移补偿、重采样、回声分析、离线仿真
   aurio-ffi/     给 Swift 调用的 C 接口（静态库 + include/aurio.h）
   aurio-win/     Windows 音频与系统集成：WASAPI 采集、麦克风回放、设备设置、驱动管理、Bonjour 发现
-  aurio-tools/   开发工具：aurio-send（测试发送端）、aurio-sim（离线仿真）
+  aurio-update/  在线更新：签名清单、版本比较、镜像回退下载
+  aurio-tools/   开发工具：aurio-send（测试发送端）、aurio-sim（离线仿真）、aurio-sign（更新签名）
 apps/win-tauri/  Windows 图形界面（Tauri 2）
 mac/AurioMac/    Mac 端：AurioKit（CoreAudio 引擎）、Aurio（菜单栏 App）、aurio-rx（命令行版）
 installer/       Windows 安装包脚本（NSIS）、macOS 安装盘布局（dmgbuild）

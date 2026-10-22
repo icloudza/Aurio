@@ -165,7 +165,59 @@ Windows 端的渲染线程以 CABLE Input 的设备时钟为准拉取数据，�
 - **驱动管理**：从 VB-Audio 官网下载官方驱动包，解压后用 Authenticode 校验签名者。然后以管理员身份重新启动自身（`Aurio.exe --driver-helper install|uninstall|status`）执行静默安装。卸载时用 `pnputil` 清理设备、音频端点和驱动包。整个过程只弹出一次 UAC 确认框。
 - **托盘与生命周期**：关闭窗口时按设置缩到托盘或退出；单实例（再次启动时激活已有窗口）；开机自启参数 `--tray`。托盘图标根据注册表 `SystemUsesLightTheme`（任务栏主题，不是应用主题）切换黑白两套。
 
-## 8. 延迟构成
+## 8. 在线更新
+
+两端都从 GitHub Release 获取新版本，下载顺序都是「国内加速镜像 → GitHub 官方」。镜像由第三方运营，所以签名校验是这套机制的前提。
+
+### 8.1 发布产物与签名
+
+CI 发布时，除了安装包本身，还会上传三个文件：
+
+| 文件 | 用途 |
+|---|---|
+| `latest.json` | 版本清单：版本号、更新说明，以及每个平台的文件名、官方下载地址、大小、SHA-256 和 Ed25519 签名 |
+| `latest.json.sig` | 对清单本身的 Ed25519 签名，防止有人用旧清单冒充新版本 |
+| `appcast.xml` | 给 macOS 的 Sparkle 用，包含安装盘地址和 EdDSA 签名 |
+
+两端共用同一对 Ed25519 密钥（`crates/aurio-update`，标准 RFC 8032，和 Sparkle 的 EdDSA 签名完全兼容）：
+
+- **私钥**只存在 GitHub Secrets（`UPDATE_SIGNING_KEY`）和发布者本机，由 `aurio-sign` 工具在 CI 中签名。
+- **公钥**内置在程序中：Windows 端是 `aurio_update::PUBLIC_KEY`，macOS 端是 `Info.plist` 的 `SUPublicEDKey`。CI 会核对两者一致。
+
+客户端通过固定地址 `releases/latest/download/<文件>` 获取最新版本，不调用 GitHub API，因此不受未登录时每小时 60 次的频率限制，镜像也能加速这个地址。
+
+### 8.2 下载来源
+
+内置的镜像（前缀式：镜像地址 + 完整的 GitHub 地址）按顺序尝试，最后是官方源：
+
+1. `gh-proxy.com`
+2. `gh.llkk.cc`
+3. `ghfast.top`
+4. GitHub 官方
+
+这三个镜像都实测支持跟随 `latest/download` 的跳转，也支持 HTTP Range 续传。清单里可以带 `mirrors` 字段，在不发新版的情况下替换这个列表（清单本身是签名的，不会被篡改）。上次成功的来源会排到最前面。
+
+### 8.3 Windows
+
+在 Rust 中自行实现（`aurio_update::client` 和 `aurio-win` 的 `update` 模块）：
+
+1. **检查**：依次从各来源取 `latest.json` 和 `.sig`，用内置公钥验签，比较版本号。启动 8 秒后自动检查一次，之后每 6 小时看一次，距上次检查超过 20 小时才真正联网。可以关闭自动检查，也可以跳过某个版本。
+2. **下载**：保存到 `%TEMP%\Aurio\update`，支持断点续传。来源连不上、返回错误、热身 8 秒后速度低于 32 KB/s，或者下载完的文件大小、SHA-256、签名任一不符，都会换下一个来源。下载使用系统 TLS（schannel）和系统代理设置。
+3. **安装**：运行前再验一次签名。然后把自身复制为 `aurio-updater.exe`（安装包会结束所有 `Aurio.exe`，所以要换个文件名），由它等待主程序退出，再以管理员身份运行 `Aurio-Setup.exe /S /UPDATE`。
+4. **安装包**：`/UPDATE` 模式下沿用原来的安装位置和组件选择（桌面快捷方式、开机自启），静默模式下不弹任何对话框。装完后由更新助手以普通权限重新打开 Aurio。
+
+### 8.4 macOS
+
+使用 [Sparkle 2](https://sparkle-project.org/)，由它负责界面、下载、校验（EdDSA 加 Apple 代码签名）、替换 App 和重启。`UpdateController` 在此基础上补充镜像逻辑：
+
+- **选择来源**：检查前依次请求各来源的 `appcast.xml`（6 秒超时），用第一个返回有效清单的来源（`feedURLStringForUpdater`）。
+- **下载**：在 `willDownloadUpdate:withRequest:` 中把安装盘地址改为同一个来源。
+- **出错重试**：清单、下载或签名校验出错（错误码 1000、1002、2001、3001、3002）时，把该镜像标记为 6 小时内不可用，换下一个来源自动重试。
+- **温和提醒**：菜单栏 App 平时不在前台，后台检查到新版本时不弹窗，只在菜单栏图标上显示小圆点，并在面板「检查更新…」一行显示版本号。
+
+Sparkle.framework 放在 `Aurio.app/Contents/Frameworks`。Aurio 没有开沙盒，不需要它的 XPC 服务，打包时删掉，其余部分按 Sparkle 要求由内到外签名。
+
+## 9. 延迟构成
 
 有线局域网下的实测和估算：
 
@@ -181,10 +233,11 @@ Windows 端的渲染线程以 CABLE Input 的设备时钟为准拉取数据，�
 
 进一步降低延迟的空间主要在 Windows 采集周期上：Windows 10 起的 `IAudioClient3` 低延迟共享模式可以把周期降到约 3 ms，但需要声卡驱动支持，预计能节省 3–5 ms。
 
-## 9. 测试
+## 10. 测试
 
 - 核心库有单元测试：`cargo test --release -p aurio-core`。
 - `aurio-sim` 离线仿真可以模拟时钟偏差、采集周期、抖动和丢包，快速验证长时间运行的稳定性。例如时钟偏差 +80 ppm、抖动 2 ms 的条件下，仿真 24 小时零欠载。
 - `aurio-send` 可以在没有 Windows 的情况下向 Mac 发送测试信号。
+- `aurio-update` 的集成测试在本机起 HTTP 服务器，模拟镜像连不上、返回错误、清单签名错误、安装包被篡改、速度过慢和断点续传。
 
 详见 [DEVELOPMENT.md](DEVELOPMENT.md) 和 [TESTING.md](TESTING.md)。

@@ -6,4 +6,7 @@ edition.workspace = true
 [dependencies]
 aurio-core = { path = "../aurio-core" }
 hound = "3.5"
+aurio-update = { path = "../aurio-update" }
+serde_json = "1"
+getrandom = "0.2"
 rtrb.workspace = true

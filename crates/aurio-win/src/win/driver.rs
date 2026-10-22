@@ -129,7 +129,7 @@ fn verify(exe: &Path) -> Res<()> {
 }
 
 /// 以管理员身份运行（弹 UAC 确认框），隐藏窗口，等它结束并返回退出码。
-fn run_elevated(exe: &Path, args: &str) -> Res<u32> {
+pub(crate) fn run_elevated(exe: &Path, args: &str) -> Res<u32> {
     let file = HSTRING::from(exe.as_os_str());
     let params = HSTRING::from(args);
     let verb = HSTRING::from("runas");

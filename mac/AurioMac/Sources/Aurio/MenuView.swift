@@ -165,6 +165,8 @@ struct MenuView: View {
                 NativeSwitch(isOn: Binding(get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
             }
             Rectangle().fill(Theme.separator).frame(height: 0.5)
+            UpdateRow(updates: model.updates)
+            Rectangle().fill(Theme.separator).frame(height: 0.5)
             ListRow(action: { model.quit() }) {
                 Text("退出 Aurio").font(.system(size: 13))
                 Spacer()
@@ -182,6 +184,26 @@ struct MenuView: View {
             Text(label).font(.system(size: 11)).foregroundStyle(Theme.muted)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// 「检查更新…」：后台发现新版本时右侧显示版本号
+private struct UpdateRow: View {
+    @ObservedObject var updates: UpdateController
+
+    var body: some View {
+        ListRow(action: { updates.checkForUpdates() }) {
+            Text("检查更新…").font(.system(size: 13))
+            Spacer()
+            if updates.probing {
+                Text("正在检查…").font(.system(size: 12)).foregroundStyle(Theme.gray)
+            } else if let v = updates.availableVersion {
+                HStack(spacing: 5) {
+                    Circle().fill(Theme.accent).frame(width: 6, height: 6)
+                    Text("新版本 \(v)").font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.accent)
+                }
+            }
+        }
     }
 }
 

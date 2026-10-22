@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
-members = ["crates/aurio-core", "crates/aurio-ffi", "crates/aurio-tools", "crates/aurio-win", "apps/win-tauri"]
+members = ["crates/aurio-core", "crates/aurio-ffi", "crates/aurio-tools", "crates/aurio-update", "crates/aurio-win", "apps/win-tauri"]
 # Tauri 应用只给 Windows 编：scripts/build-win.sh
-default-members = ["crates/aurio-core", "crates/aurio-ffi", "crates/aurio-tools", "crates/aurio-win"]
+default-members = ["crates/aurio-core", "crates/aurio-ffi", "crates/aurio-tools", "crates/aurio-update", "crates/aurio-win"]
 
 [workspace.package]
 version = "0.2.6"

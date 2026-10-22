@@ -12,15 +12,27 @@ struct AurioApp: App {
                 .environmentObject(model)
                 .environmentObject(model.engine)
         } label: {
-            Image(nsImage: MenuBarIcon.image(active: model.linked))
+            MenuBarLabel(model: model, updates: model.updates)
         }
         .menuBarExtraStyle(.window)
     }
 }
 
-/// 保存设置、管理开机自启，持有引擎。
+/// 菜单栏图标：连接状态 + 有新版本时的小圆点
+private struct MenuBarLabel: View {
+    @ObservedObject var model: AppModel
+    @ObservedObject var updates: UpdateController
+
+    var body: some View {
+        Image(nsImage: MenuBarIcon.image(active: model.linked, badge: updates.availableVersion != nil))
+    }
+}
+
+/// 保存设置、管理开机自启，持有引擎和更新控制器。
 final class AppModel: ObservableObject {
     let engine: AurioEngine
+    /// 在线更新（截图和测试模式下不启动，不联网）
+    let updates: UpdateController
     private let defaults = UserDefaults.standard
     private var sub: Any?
     /// 测试用：环境变量 AURIO_MUTE=1 时音量固定为 0 且不保存
@@ -38,6 +50,7 @@ final class AppModel: ObservableObject {
                                  echoCancel: env["AURIO_SNAPSHOT_AEC"] == "1")
             launchAtLogin = false
             forceMute = true
+            updates = UpdateController(start: false)
             DispatchQueue.main.async { [self] in self.renderSnapshots(to: dir) }
             return
         }
@@ -46,6 +59,7 @@ final class AppModel: ObservableObject {
             engine = AurioEngine(port: 0, outputUID: nil, inputUID: nil, micMode: .off, volume: 0)
             launchAtLogin = false
             forceMute = true
+            updates = UpdateController(start: false)
             AppModel.runAecTest(outPath: out)
             return
         }
@@ -63,6 +77,7 @@ final class AppModel: ObservableObject {
             echoCancel: defaults.object(forKey: "echoCancel") as? Bool ?? false)
         engine.micTestTone = env["AURIO_MIC_TONE"] == "1"
         launchAtLogin = SMAppService.mainApp.status == .enabled
+        updates = UpdateController(start: true)
         sub = engine.$state.sink { [weak self] st in
             switch st {
             case .playing, .connected: self?.linked = true
@@ -145,9 +160,9 @@ final class AppModel: ObservableObject {
             host.cacheDisplay(in: host.bounds, to: rep)
             try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: dir).appendingPathComponent(name))
         }
-        for active in [true, false] {
+        for (active, badge) in [(true, false), (false, false), (true, true)] {
             // 菜单栏图标：模板图按黑色画，这里 4 倍放大存档
-            let img = MenuBarIcon.image(active: active)
+            let img = MenuBarIcon.image(active: active, badge: badge)
             let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 72, pixelsHigh: 72, bitsPerSample: 8,
                                        samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
                                        bytesPerRow: 0, bitsPerPixel: 0)!
@@ -156,10 +171,12 @@ final class AppModel: ObservableObject {
             img.draw(in: NSRect(x: 0, y: 0, width: 72, height: 72))
             NSGraphicsContext.restoreGraphicsState()
             try? rep.representation(using: .png, properties: [:])?
-                .write(to: URL(fileURLWithPath: dir).appendingPathComponent(active ? "menubar-on.png" : "menubar-off.png"))
+                .write(to: URL(fileURLWithPath: dir).appendingPathComponent(badge ? "menubar-update.png" : active ? "menubar-on.png" : "menubar-off.png"))
         }
         engine.applyPreviewState("playing")
+        updates.showPreview(version: "0.2.7")
         save(MenuView(), "menu-playing.png")
+        updates.showPreview(version: nil)
         engine.applyPreviewState("waiting")
         save(MenuView(), "menu-waiting.png")
         NSApplication.shared.terminate(nil)
@@ -175,10 +192,12 @@ final class AppModel: ObservableObject {
 enum MenuBarIcon {
     /// viewBox 24 里的竖条 (x, 上 y, 下 y)，和 scripts/make-icons.py 的 BARS5 一致
     static let bars: [(CGFloat, CGFloat, CGFloat)] = [(4, 10, 14), (8, 7, 17), (12, 4, 20), (16, 7, 17), (20, 10, 14)]
-    private static var cache: [Bool: NSImage] = [:]
+    private static var cache: [String: NSImage] = [:]
 
-    static func image(active: Bool) -> NSImage {
-        if let img = cache[active] { return img }
+    /// active：已连接（实心）；badge：有新版本（右上角小圆点）
+    static func image(active: Bool, badge: Bool = false) -> NSImage {
+        let key = "\(active)-\(badge)"
+        if let img = cache[key] { return img }
         let size: CGFloat = 18
         let img = NSImage(size: NSSize(width: size, height: size), flipped: true) { _ in
             let k = size / 24
@@ -191,11 +210,15 @@ enum MenuBarIcon {
             path.lineCapStyle = .round
             NSColor.black.withAlphaComponent(active ? 1 : 0.45).setStroke()
             path.stroke()
+            if badge {
+                NSColor.black.setFill()
+                NSBezierPath(ovalIn: NSRect(x: 13.6, y: 0.6, width: 4.4, height: 4.4)).fill()
+            }
             return true
         }
         img.isTemplate = true
-        img.accessibilityDescription = active ? "Aurio（已连接）" : "Aurio（未连接）"
-        cache[active] = img
+        img.accessibilityDescription = (active ? "Aurio（已连接）" : "Aurio（未连接）") + (badge ? "，有新版本" : "")
+        cache[key] = img
         return img
     }
 }

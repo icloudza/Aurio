@@ -11,6 +11,7 @@ pub mod policy;
 pub mod send;
 pub mod setup;
 pub mod theme;
+pub mod update;
 
 use aurio_tools::Args;
 

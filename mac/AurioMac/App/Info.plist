@@ -36,5 +36,15 @@
 	<array>
 		<string>_aurio._udp</string>
 	</array>
+	<!-- 在线更新（Sparkle）：实际的清单地址由 UpdateController 按镜像动态决定，这里是官方地址 -->
+	<key>SUFeedURL</key>
+	<string>https://github.com/icloudza/Aurio/releases/latest/download/appcast.xml</string>
+	<!-- 和 crates/aurio-update 的 PUBLIC_KEY 相同 -->
+	<key>SUPublicEDKey</key>
+	<string>DssE8uUdmQ2exfmQWbQsxQ0euPzjuAknXS/mKsxZmpo=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>

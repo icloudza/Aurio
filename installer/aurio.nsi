@@ -2,6 +2,7 @@
 ; 由 scripts/build-win.sh 调用：makensis -DVERSION=x.y.z -DSRC=<程序目录> -DOUTFILE=<输出> installer/aurio.nsi
 ;
 ; 安装：欢迎 → 说明 → 组件 → 安装位置 → 安装 → 完成（可勾选运行）
+; 在线更新：Aurio 以 /S /UPDATE 静默运行，沿用上次的安装位置和组件选择，装完由 Aurio 的更新助手重新打开
 ; 卸载：自定义确认面板（检测虚拟声卡驱动）→ 先卸载驱动再卸载软件 → 完成页提示重启
 
 Unicode true
@@ -105,6 +106,13 @@ Function .onInit
   ${If} $0 != ""
     StrCpy $INSTDIR $0
   ${EndIf}
+  ; 在线更新（Aurio 自动调用：/S /UPDATE）：沿用上次的组件选择
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/UPDATE" $R1
+  ${IfNot} ${Errors}
+    Call KeepPreviousChoices
+  ${EndIf}
 FunctionEnd
 
 ; 关掉正在运行的 Aurio（界面和命令行版）
@@ -164,6 +172,18 @@ Section /o "开机时自动启动" SecAutostart
   WriteRegStr HKCU "${RUN_KEY}" "${APP}" '"$INSTDIR\${EXE}" --tray'
 SectionEnd
 
+; 在线更新时：原来没有桌面快捷方式就不建，原来开了开机自启就保留（区段编号要在区段定义之后才能用）
+Function KeepPreviousChoices
+  SetShellVarContext all
+  ${IfNot} ${FileExists} "$DESKTOP\${APP}.lnk"
+    SectionSetFlags ${SecDesktop} 0
+  ${EndIf}
+  ReadRegStr $0 HKCU "${RUN_KEY}" "${APP}"
+  ${If} $0 != ""
+    SectionSetFlags ${SecAutostart} ${SF_SELECTED}
+  ${EndIf}
+FunctionEnd
+
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
   !insertmacro MUI_DESCRIPTION_TEXT ${SecCore} "Aurio 程序本身，以及开始菜单里的「Aurio」和「卸载 Aurio」快捷方式。"
   !insertmacro MUI_DESCRIPTION_TEXT ${SecDesktop} "在桌面上放一个 Aurio 快捷方式。"
@@ -179,7 +199,7 @@ Function .onInstSuccess
   ${EndIf}
   ${If} $0 == ""
   ${OrIf} $0 == "0.0.0.0"
-    MessageBox MB_YESNO|MB_ICONEXCLAMATION "这台电脑缺少 Microsoft WebView2 运行时，Aurio 的界面需要它。$\r$\n$\r$\n现在打开微软的下载页面吗？（下载「常青版引导程序」安装即可）" IDNO +2
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION "这台电脑缺少 Microsoft WebView2 运行时，Aurio 的界面需要它。$\r$\n$\r$\n现在打开微软的下载页面吗？（下载「常青版引导程序」安装即可）" /SD IDNO IDNO +2
     ExecShell "open" "https://developer.microsoft.com/microsoft-edge/webview2/"
   ${EndIf}
 FunctionEnd

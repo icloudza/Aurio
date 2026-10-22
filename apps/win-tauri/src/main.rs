@@ -14,6 +14,7 @@ mod app {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use aurio_win::win::theme;
+    use aurio_win::win::update::{UpdateStatus, Updater};
     use tauri::image::Image;
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -30,6 +31,12 @@ mod app {
         pub auto_connect: bool,
         /// 点关闭时怎么做："tray" 缩到托盘，"quit" 退出，其他（含空）每次询问
         pub close_action: String,
+        /// 关闭自动检查更新（默认开着）
+        pub update_auto_off: bool,
+        /// 用户选了「跳过这个版本」：自动检查时不再提示它
+        pub update_skipped: String,
+        /// 上次自动检查的时间（Unix 秒）
+        pub update_checked_at: u64,
     }
 
     pub struct Inner {
@@ -38,6 +45,7 @@ mod app {
         driver: Mutex<Option<DriverTask>>,
         settings: Mutex<Settings>,
         path: PathBuf,
+        updater: Updater,
     }
 
     type AppState = Arc<Inner>;
@@ -285,11 +293,79 @@ mod app {
         }
     }
 
+    // ———————————————————— 在线更新 ————————————————————
+
+    #[tauri::command]
+    fn update_status(state: State<'_, AppState>) -> UpdateStatus {
+        state.updater.status()
+    }
+
+    /// 手动检查：不管有没有跳过这个版本，都如实显示
+    #[tauri::command]
+    async fn update_check(state: State<'_, AppState>) -> Result<UpdateStatus, String> {
+        let st = state.inner().clone();
+        blocking(move || Ok(st.updater.check())).await
+    }
+
+    #[tauri::command]
+    fn update_download(state: State<'_, AppState>) -> Result<(), String> {
+        state.updater.start_download()
+    }
+
+    /// 运行新版安装包：成功后退出 Aurio，由更新助手装完重新打开
+    #[tauri::command]
+    fn update_install(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+        state.updater.install()?;
+        quit(&app);
+        Ok(())
+    }
+
+    /// 跳过这个版本：自动检查不再提示它（手动检查仍会显示）
+    #[tauri::command]
+    fn update_skip(state: State<'_, AppState>, version: String) {
+        state.settings.lock().unwrap().update_skipped = version;
+        state.save();
+    }
+
+    /// 启动 8 秒后检查一次，之后每 6 小时看看，距上次检查超过 20 小时才真的去查。
+    /// 发现新版本（且没被跳过）时通知界面，并在托盘提示里写上。
+    fn start_auto_update_check(app: &AppHandle) {
+        let handle = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(8));
+            loop {
+                if let Some(st) = handle.try_state::<AppState>() {
+                    let (off, last, skipped) = {
+                        let s = st.settings.lock().unwrap();
+                        (s.update_auto_off, s.update_checked_at, s.update_skipped.clone())
+                    };
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    if !off && now.saturating_sub(last) > 20 * 3600 {
+                        let status = st.updater.check();
+                        if status.stage != "error" {
+                            st.settings.lock().unwrap().update_checked_at = now;
+                            st.save();
+                        }
+                        let newer = matches!(status.stage.as_str(), "available" | "ready");
+                        if newer && status.latest.as_deref() != Some(skipped.as_str()) {
+                            let _ = handle.emit("update-available", &status);
+                        }
+                    }
+                }
+                std::thread::sleep(Duration::from_secs(6 * 3600));
+            }
+        });
+    }
+
     fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         let open = MenuItem::with_id(app, "open", "打开 Aurio", true, None::<&str>)?;
+        let update = MenuItem::with_id(app, "update", "检查更新…", true, None::<&str>)?;
         let sep = PredefinedMenuItem::separator(app)?;
         let exit = MenuItem::with_id(app, "quit", "退出 Aurio", true, None::<&str>)?;
-        let menu = Menu::with_items(app, &[&open, &sep, &exit])?;
+        let menu = Menu::with_items(app, &[&open, &update, &sep, &exit])?;
         let light = theme::taskbar_is_light();
         TrayIconBuilder::with_id("main")
             .icon(tray_image(light, false))
@@ -298,6 +374,11 @@ mod app {
             .show_menu_on_left_click(false)
             .on_menu_event(|app, ev| match ev.id().as_ref() {
                 "open" => show_main(app),
+                "update" => {
+                    // 打开窗口，让界面跳到设置页的「更新」并立刻检查
+                    show_main(app);
+                    let _ = app.emit("open-update", ());
+                }
                 "quit" => quit(app),
                 _ => {}
             })
@@ -348,8 +429,16 @@ mod app {
                     .ok()
                     .and_then(|s| serde_json::from_str::<Settings>(&s).ok())
                     .unwrap_or_default();
-                app.manage(Arc::new(Inner { engine: Mutex::new(None), echo: Mutex::new(None), driver: Mutex::new(None), settings: Mutex::new(settings), path }));
+                app.manage(Arc::new(Inner {
+                    engine: Mutex::new(None),
+                    echo: Mutex::new(None),
+                    driver: Mutex::new(None),
+                    settings: Mutex::new(settings),
+                    path,
+                    updater: Updater::new(),
+                }));
                 setup_tray(app.handle())?;
+                start_auto_update_check(app.handle());
                 // 窗口在配置里默认隐藏，免得 --tray 启动时闪一下
                 if !start_in_tray {
                     show_main(app.handle());
@@ -405,7 +494,12 @@ mod app {
                 driver_action,
                 driver_progress,
                 restart_computer,
-                close_window
+                close_window,
+                update_status,
+                update_check,
+                update_download,
+                update_install,
+                update_skip
             ])
             .run(tauri::generate_context!())
             .expect("Aurio 启动失败");
@@ -419,6 +513,10 @@ fn main() {
         let args: Vec<String> = std::env::args().skip(1).collect();
         if args.first().map(|a| a.as_str()) == Some("--driver-helper") {
             std::process::exit(aurio_win::win::driver::helper_main(&args[1..]));
+        }
+        // 在线更新的助手：等主程序退出 → 静默安装新版 → 重新打开 Aurio
+        if args.first().map(|a| a.as_str()) == Some("--update-helper") {
+            std::process::exit(aurio_win::win::update::helper_main(&args[1..]));
         }
     }
     #[cfg(windows)]

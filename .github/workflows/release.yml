@@ -3,8 +3,9 @@
 # - 推送 v* 标签（例如 v0.2.6）：打包、签名、公证，并创建 GitHub Release 草稿
 # - 手动运行（Actions → 打包发布 → Run workflow）：只打包，产物在本次运行的 Artifacts 里
 #
-# macOS 签名和公证需要的 Secrets 见 docs/RELEASE.md，可以用 scripts/setup-ci-secrets.sh 一次配置。
-# 没有配置时，macOS 版仍会打包，但只做临时签名、不公证。
+# 需要的 Secrets 见 docs/RELEASE.md，可以用 scripts/setup-ci-secrets.sh 一次配置：
+# - macOS 签名和公证：没有配置时 macOS 版仍会打包，但只做临时签名、不公证
+# - UPDATE_SIGNING_KEY：在线更新清单的签名私钥。没有配置时不生成更新清单，已安装的 Aurio 收不到这次更新
 name: 打包发布
 
 on:
@@ -46,6 +47,10 @@ jobs:
           [ "$TAURI" = "$VERSION" ] || fail "tauri.conf.json 里的版本是 $TAURI，应为 $VERSION"
           [ "$PLIST" = "$VERSION" ] || fail "Info.plist 里的版本是 $PLIST，应为 $VERSION"
           grep -q "Aurio $VERSION<" apps/win-tauri/ui/index.html || fail "index.html 设置页的版本号不是 $VERSION"
+          # 两端内置的更新公钥必须相同
+          RUST_KEY=$(sed -n 's/^pub const PUBLIC_KEY: &str = "\(.*\)";/\1/p' crates/aurio-update/src/lib.rs)
+          MAC_KEY=$(python3 -c 'import plistlib; print(plistlib.load(open("mac/AurioMac/App/Info.plist", "rb"))["SUPublicEDKey"])')
+          [ -n "$RUST_KEY" ] && [ "$RUST_KEY" = "$MAC_KEY" ] || fail "Info.plist 的 SUPublicEDKey 和 aurio-update 的 PUBLIC_KEY 不一致"
 
   test:
     name: 核心库测试
@@ -56,7 +61,10 @@ jobs:
         with:
           key: core-test
       - name: 单元测试
-        run: cargo test --release -p aurio-core
+        run: |
+          cargo test --release -p aurio-core
+          # 在线更新：签名、清单，以及模拟各种镜像故障的下载测试
+          cargo test --release -p aurio-update --features client
 
   windows:
     name: Windows 安装包
@@ -178,11 +186,14 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: 生成校验和与更新说明
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-tools
+
+      - name: 提取更新说明
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          (cd dist && sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt)
           # 取 CHANGELOG.md 里本版本的那一节
           python3 - <<'EOF'
           import os, re
@@ -192,6 +203,29 @@ jobs:
           notes = m.group(1).strip() if m else f"Aurio {v}"
           open("notes.md", "w", encoding="utf-8").write(notes + "\n")
           EOF
+
+      - name: 生成签名的更新清单
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          AURIO_UPDATE_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -z "$AURIO_UPDATE_KEY" ]; then
+            echo "::warning::没有配置 UPDATE_SIGNING_KEY，不生成更新清单：已安装的 Aurio 收不到这次更新"
+            exit 0
+          fi
+          cargo build --release -p aurio-tools --bin aurio-sign
+          ./target/release/aurio-sign release \
+            --version "$VERSION" --tag "$GITHUB_REF_NAME" --notes notes.md \
+            --date-iso "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --date-rfc2822 "$(date -u -R)" \
+            --windows "dist/Aurio-Setup-$VERSION.exe" --macos "dist/Aurio-$VERSION.dmg" \
+            --out dist
+          # 自检：用内置公钥验证刚生成的签名
+          ./target/release/aurio-sign verify dist/latest.json "$(cat dist/latest.json.sig)"
+          ./target/release/aurio-sign verify "dist/Aurio-Setup-$VERSION.exe" \
+            "$(python3 -c 'import json; print(json.load(open("dist/latest.json"))["platforms"]["windows-x86_64"]["signature"])')"
+
+      - name: 生成校验和
+        run: (cd dist && sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt)
 
       - name: 上传到 Release（草稿，确认后手动发布）
         env:
