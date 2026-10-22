@@ -57,13 +57,27 @@ notarize() {
     fi
 }
 
+# 装订公证票据。刚公证完时苹果的票据服务偶尔连不上或还没同步，失败了等一会儿重试
+staple() {
+    n=1
+    while ! xcrun stapler staple "$1"; do
+        if [ "$n" -ge 5 ]; then
+            echo "装订公证票据失败（已重试 $n 次）：$1" >&2
+            exit 1
+        fi
+        echo "装订失败，20 秒后重试（第 $n 次）…"
+        n=$((n + 1))
+        sleep 20
+    done
+}
+
 # 1. 先公证 App 并装订票据：用户把 App 拷出 DMG 后，离线首次打开也能通过 Gatekeeper
 if [ -n "$NOTARIZE" ]; then
     ZIP="$(mktemp -d)/Aurio.zip"
     ditto -c -k --keepParent "$APP" "$ZIP"
     notarize "$ZIP"
     rm -f "$ZIP"
-    xcrun stapler staple "$APP"
+    staple "$APP"
 fi
 
 # 2. 生成 DMG
@@ -85,7 +99,7 @@ fi
 # 4. 公证 DMG 并装订
 if [ -n "$NOTARIZE" ]; then
     notarize "$DMG"
-    xcrun stapler staple "$DMG"
+    staple "$DMG"
     spctl -a -t open --context context:primary-signature -v "$DMG"
 else
     echo "没有设置公证用的环境变量，跳过公证（分发给他人前需要公证）"
