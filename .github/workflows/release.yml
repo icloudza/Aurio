@@ -44,8 +44,8 @@ jobs:
           fi
           TAURI=$(python3 -c 'import json; print(json.load(open("apps/win-tauri/tauri.conf.json"))["version"])')
           PLIST=$(python3 -c 'import plistlib; print(plistlib.load(open("mac/AurioMac/App/Info.plist", "rb"))["CFBundleShortVersionString"])')
-          [ "$TAURI" = "$VERSION" ] || fail "tauri.conf.json 里的版本是 $TAURI，应为 $VERSION"
-          [ "$PLIST" = "$VERSION" ] || fail "Info.plist 里的版本是 $PLIST，应为 $VERSION"
+          [ "$TAURI" = "$VERSION" ] || fail "tauri.conf.json 里的版本是 ${TAURI}，应为 $VERSION"
+          [ "$PLIST" = "$VERSION" ] || fail "Info.plist 里的版本是 ${PLIST}，应为 $VERSION"
           grep -q "Aurio $VERSION<" apps/win-tauri/ui/index.html || fail "index.html 设置页的版本号不是 $VERSION"
           # 两端内置的更新公钥必须相同
           RUST_KEY=$(sed -n 's/^pub const PUBLIC_KEY: &str = "\(.*\)";/\1/p' crates/aurio-update/src/lib.rs)

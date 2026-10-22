@@ -24,5 +24,5 @@ rm -f dist/Aurio-Windows.zip dist/aurio-win.exe dist/VBCABLE_Driver_Pack45.zip
 (cd dist && zip -qr Aurio-Windows.zip Aurio-Windows)
 echo
 echo "完成："
-echo "  $SETUP（安装包）"
+echo "  ${SETUP}（安装包）"
 echo "  dist/Aurio-Windows.zip（免安装版，解压后双击 Aurio.exe）"

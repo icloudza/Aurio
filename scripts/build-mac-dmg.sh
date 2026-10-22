@@ -49,7 +49,7 @@ notarize() {
         --wait --timeout 30m --output-format json)"
     STATUS="$(printf '%s' "$OUT" | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))')"
     SUB_ID="$(printf '%s' "$OUT" | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))')"
-    echo "公证结果：$STATUS（$SUB_ID）"
+    echo "公证结果：${STATUS}（${SUB_ID}）"
     if [ "$STATUS" != "Accepted" ]; then
         xcrun notarytool log "$SUB_ID" \
             --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID" || true
