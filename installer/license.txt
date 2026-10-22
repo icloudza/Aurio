@@ -1,0 +1,14 @@
+﻿Aurio
+
+Aurio 把 Mac 上的 Studio Display 变成这台 Windows 电脑的扬声器和麦克风，在局域网内传输声音。
+
+使用前需要：
+  1. Mac 上运行 Aurio 菜单栏程序；
+  2. 两台电脑在同一个局域网里。
+
+关于虚拟声卡驱动（VB-Cable）
+  麦克风功能需要一个虚拟声卡驱动。Aurio 使用 VB-Audio 开发的 VB-Cable（www.vb-cable.com），它是捐赠软件，版权归 VB-Audio 所有。
+  本安装程序不包含 VB-Cable。需要时在 Aurio 的「设置」里点「安装驱动」，会从 VB-Audio 官网下载官方安装包、校验签名后安装；点击安装即表示同意 VB-Cable 的许可协议。
+  卸载 Aurio 时，如果检测到 VB-Cable，会先把它卸载干净。
+
+本软件按「现状」提供，不附带任何明示或暗示的保证。

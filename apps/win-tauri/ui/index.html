@@ -1,0 +1,1009 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aurio</title>
+<style>
+  :root {
+    --bg: #f6f6f4;
+    --card: #ffffff;
+    --card-line: rgba(17, 24, 39, 0.06);
+    --hair: #f0f0f2;
+    --line: #e5e7eb;
+    --text: #111827;
+    --text2: #374151;
+    --muted: #6b7280;
+    --faint: #9ca3af;
+    --tile: #f3f4f6;
+    --accent: #14a08e;
+    --accent-strong: #0f8a7a;
+    --accent-ink: #0b6b5e;
+    --accent-soft: #e7f4f1;
+    --ok: #16a36a; --ok-ink: #0e6b47; --ok-soft: #e8f6f0;
+    --warn: #c2750a; --warn-ink: #8a4f00; --warn-soft: #fdf3e2;
+    --bad: #d6402e; --bad-soft: #fdecea;
+    --seg-off: #ecedef;
+    --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.04);
+    --shadow-lg: 0 1px 2px rgba(17, 24, 39, 0.04), 0 14px 32px -18px rgba(17, 24, 39, 0.22);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); overflow: hidden;
+    font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+    font-feature-settings: "tnum" 1; -webkit-font-smoothing: antialiased;
+    user-select: none; display: flex; flex-direction: column;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: default; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  .num { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+
+  /* ———— 标题栏 ———— */
+  .titlebar { height: 44px; flex: none; display: flex; align-items: center; padding-left: 16px; gap: 10px; }
+  .logo { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); display: grid; place-items: center; flex: none; }
+  .appname { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+  .drag { flex: 1; align-self: stretch; }
+  .winbtn { width: 44px; height: 44px; border: none; background: transparent; color: var(--muted); display: grid; place-items: center; }
+  .winbtn:hover { background: rgba(17, 24, 39, 0.05); color: var(--text); }
+  .winbtn.close:hover { background: #c42b1c; color: #fff; }
+
+  /* ———— 页面 ———— */
+  .page { flex: 1; min-height: 0; overflow-y: auto; display: none; padding: 4px 16px 12px; flex-direction: column; gap: 12px; }
+  .page.on { display: flex; }
+  .page::-webkit-scrollbar { width: 10px; }
+  .page::-webkit-scrollbar-thumb { background: #d9dadc; border-radius: 5px; border: 3px solid var(--bg); }
+
+  .card { background: var(--card); border-radius: 16px; border: 1px solid var(--card-line); box-shadow: var(--shadow-sm); }
+  .card.raised { box-shadow: var(--shadow-lg); }
+  .card-title { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0.01em; display: flex; align-items: center; gap: 8px; }
+  .card-title .grow { flex: 1; }
+
+  /* ———— 连接卡片 ———— */
+  .hero { padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+  .dev { display: flex; align-items: center; gap: 12px; }
+  .avatar { width: 44px; height: 44px; border-radius: 12px; background: #f1f4f3; display: grid; place-items: center; flex: none; }
+  .dev-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .dev-name { align-self: flex-start; max-width: 100%; display: inline-flex; align-items: center; gap: 4px; border: none; background: transparent; padding: 2px 6px; margin: -2px -6px; border-radius: 6px; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .dev-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dev-name:hover:not(:disabled) { background: var(--tile); }
+  .dev-name:disabled svg { display: none; }
+  .dev-sub { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; flex: none; background: var(--tile); color: var(--muted); }
+  .badge i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+  .badge.ok { background: var(--ok-soft); color: var(--ok-ink); } .badge.ok i { background: var(--ok); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn-ink); } .badge.warn i { background: var(--warn); }
+  .badge.busy i { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
+  .stat { padding: 12px 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .stat + .stat { padding-left: 14px; border-left: 1px solid var(--hair); }
+  .stat .k { font-size: 11.5px; color: var(--muted); }
+  .stat .v { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+  .stat .v small { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+  .stat .v.dim { color: var(--faint); }
+
+  .btn-main { height: 40px; border-radius: 10px; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid transparent; transition: background .15s, box-shadow .15s; }
+  .btn-main.go { background: var(--accent); color: #fff; box-shadow: 0 1px 2px rgba(15, 138, 122, 0.3), inset 0 1px 0 rgba(255,255,255,.15); }
+  .btn-main.go:hover:not(:disabled) { background: var(--accent-strong); }
+  .btn-main.stop { background: #fff; border-color: var(--line); color: var(--text); box-shadow: 0 1px 1px rgba(17,24,39,.04); }
+  .btn-main.stop:hover:not(:disabled) { background: #fafafa; }
+  .btn-main:disabled { opacity: .6; }
+
+  /* ———— 音频卡片 ———— */
+  .audio { padding: 6px 18px; }
+  .arow { padding: 14px 0; display: flex; flex-direction: column; gap: 12px; }
+  .arow + .arow { border-top: 1px solid var(--hair); }
+  .ahead { display: flex; align-items: center; gap: 12px; }
+  .tile { width: 34px; height: 34px; border-radius: 10px; background: var(--tile); display: grid; place-items: center; flex: none; }
+  .atext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .atitle { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+  .asub { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .adb { font-size: 13px; color: var(--text2); white-space: nowrap; }
+  .tag { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-ink); font-size: 11.5px; font-weight: 500; }
+  .segs { display: flex; gap: 3px; }
+  .segs i { flex: 1; height: 6px; border-radius: 2px; background: var(--seg-off); transition: background .12s; }
+  .segs i.on { background: var(--accent); }
+
+  .note { display: flex; align-items: center; gap: 8px; padding: 2px 4px; font-size: 12.5px; color: var(--muted); background: none; border: none; text-align: left; width: 100%; }
+  .note .sep { color: #d1d5db; }
+  .note.warn { color: var(--warn-ink); }
+  .note.warn:hover { text-decoration: underline; }
+  .alert { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--bad-soft); color: #8f2417; font-size: 12.5px; line-height: 1.5; }
+
+  /* ———— 表单与列表 ———— */
+  .section { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .link { border: none; background: none; color: var(--accent-ink); font-size: 12.5px; font-weight: 500; padding: 2px 4px; border-radius: 6px; }
+  .link:hover:not(:disabled) { background: var(--accent-soft); }
+  .link:disabled { color: var(--faint); }
+  .maclist { display: flex; flex-direction: column; gap: 6px; }
+  .mac { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; text-align: left; width: 100%; transition: border-color .15s, background .15s; }
+  .mac:hover:not(:disabled) { background: #fafafa; }
+  .mac.sel { border-color: var(--accent); background: #f6fbfa; box-shadow: 0 0 0 3px rgba(20, 160, 142, 0.12); }
+  .mac:disabled { opacity: .6; }
+  .mac .mt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .mac .mn { font-weight: 600; font-size: 14px; }
+  .mac .mi { font-size: 12px; color: var(--muted); }
+  .mac .check { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #d1d5db; display: grid; place-items: center; flex: none; }
+  .mac.sel .check { border-color: var(--accent); background: var(--accent); }
+  .empty { color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field > span { font-size: 12.5px; font-weight: 500; color: var(--text2); }
+  .input, .select { height: 36px; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 0 12px; font-size: 14px; box-shadow: 0 1px 1px rgba(17,24,39,.03); transition: border-color .15s, box-shadow .15s; width: 100%; }
+  .input::placeholder { color: var(--faint); }
+  .input:focus, .select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(20, 160, 142, 0.15); }
+  .select { appearance: none; padding-right: 34px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M7 10l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; text-overflow: ellipsis; }
+  .input:disabled, .select:disabled { background-color: #f9fafb; color: var(--muted); }
+  .segctl { height: 36px; background: #f1f1ef; border-radius: 10px; padding: 3px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
+  .segctl button { border: none; background: transparent; border-radius: 7px; font-size: 13px; font-weight: 500; color: var(--muted); }
+  .segctl button.on { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(17,24,39,.1); }
+  .segctl button:disabled { opacity: .6; }
+  .help { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .toggle { display: flex; align-items: center; gap: 12px; font-size: 14px; cursor: pointer; }
+  .toggle .tt { flex: 1; display: flex; flex-direction: column; }
+  .toggle .tt small { font-size: 12px; color: var(--muted); }
+  .switch { position: relative; width: 36px; height: 20px; flex: none; }
+  .switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .switch .track { position: absolute; inset: 0; border-radius: 10px; background: #d1d5db; transition: background .15s; }
+  .switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform .15s; }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track::after { transform: translateX(16px); }
+  .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .checklist { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .checklist li { display: flex; gap: 10px; font-size: 13px; line-height: 1.5; color: var(--text2); background: var(--warn-soft); border-radius: 10px; padding: 10px 12px; }
+  .checklist li svg { flex: none; margin-top: 1px; }
+  .allgood { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ok-ink); }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .btn { height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: #fff; font-size: 13px; font-weight: 500; box-shadow: 0 1px 1px rgba(17,24,39,.04); }
+  .btn:hover:not(:disabled) { background: #fafafa; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover:not(:disabled) { background: var(--accent-strong); }
+  .btn:disabled { opacity: .55; }
+  .btn.danger { color: var(--bad); border-color: #f2cdc7; }
+  .btn.danger:hover:not(:disabled) { background: var(--bad-soft); }
+  .btn.solid-danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+  .btn.solid-danger:hover:not(:disabled) { background: #b9321f; border-color: #b9321f; }
+  .drv-head { display: flex; align-items: center; gap: 12px; }
+  .drv-msg { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.5; border-radius: 10px; padding: 10px 12px; }
+  .drv-msg.ok { background: var(--ok-soft); color: var(--ok-ink); }
+  .drv-msg.err { background: var(--bad-soft); color: #8f2417; }
+  .drv-msg.run { background: #f6f7f9; color: var(--text2); }
+  .drv-msg svg { flex: none; margin-top: 1px; }
+  .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #d5f0eb; border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; margin-top: 2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .confirm { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 10px; background: #fff7f5; border: 1px solid #f6d8d2; font-size: 13px; color: #7a2216; }
+  .fine { font-size: 11.5px; color: var(--faint); line-height: 1.5; }
+  .fine a { color: var(--muted); }
+  .about { text-align: center; font-size: 12px; color: var(--faint); padding: 4px 0 8px; }
+
+  /* ———— 录音测试 ———— */
+  .test-intro { font-size: 13px; color: var(--text2); line-height: 1.6; }
+  .live { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px 12px; align-items: center; font-size: 12.5px; color: var(--muted); }
+  .bar { height: 6px; border-radius: 3px; background: var(--seg-off); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s linear; }
+  .result-v { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
+  .result-d { font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+  .kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--hair); border-radius: 10px; overflow: hidden; border: 1px solid var(--hair); }
+  .kv div { background: #fafafa; padding: 9px 12px; display: flex; flex-direction: column; }
+  .kv span { font-size: 11.5px; color: var(--muted); }
+  .kv b { font-size: 14px; font-weight: 600; }
+
+  /* ———— 底部导航 ———— */
+  .tabs { margin: 0 16px 16px; height: 48px; flex: none; background: #ecece8; border-radius: 14px; padding: 4px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+  .tabs button { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; border: none; border-radius: 10px; background: transparent; color: #4b5563; font-size: 13px; font-weight: 500; transition: background .15s; }
+  .tabs button:hover:not(.on) { background: rgba(255,255,255,.5); }
+  .tabs button.on { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(17,24,39,.08); }
+  .tabs .dot { position: absolute; top: 9px; right: calc(50% - 30px); width: 7px; height: 7px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px #ecece8; display: none; }
+  .tabs button.on .dot { box-shadow: 0 0 0 2px #fff; }
+
+  /* ———— 选择 Mac 面板 ———— */
+  .scrim { position: fixed; inset: 0; background: rgba(17, 24, 39, 0.28); display: none; z-index: 10; }
+  .scrim.on { display: block; }
+  .sheet { position: absolute; left: 16px; right: 16px; top: 64px; background: #fff; border-radius: 16px; box-shadow: 0 24px 48px -12px rgba(17,24,39,.35); }
+  .sheet .section { padding: 18px; }
+  .sheet h3 { margin: 0; font-size: 15px; font-weight: 600; flex: 1; }
+
+  /* ———— 关闭询问 ———— */
+  .close-sheet { top: auto; bottom: 16px; }
+  .close-sheet .section { display: flex; flex-direction: column; gap: 14px; }
+  .close-sheet p { margin: 0; font-size: 13px; color: var(--text2); line-height: 1.6; }
+  .choice { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: #fff; text-align: left; font: inherit; color: var(--text); }
+  .choice:hover { background: #fafafa; }
+  .choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .choice .tile { flex: none; }
+  .choice .ct { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+  .choice .ct b { font-size: 14px; font-weight: 600; }
+  .choice .ct small { font-size: 12px; color: var(--muted); }
+  .choice.primary { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); cursor: pointer; }
+  .check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+
+  #toast { position: fixed; left: 16px; right: 16px; bottom: 76px; display: none; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: #1f2937; color: #f9fafb; font-size: 13px; box-shadow: 0 12px 28px -10px rgba(17,24,39,.5); z-index: 20; }
+  #toast.on { display: flex; }
+</style>
+</head>
+<body>
+
+<div class="titlebar">
+  <div class="logo" data-tauri-drag-region>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg>
+  </div>
+  <span class="appname" data-tauri-drag-region>Aurio</span>
+  <div class="drag" data-tauri-drag-region></div>
+  <button class="winbtn" id="minBtn" aria-label="最小化"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5h10" stroke="currentColor" stroke-width="1.1"/></svg></button>
+  <button class="winbtn close" id="closeBtn" aria-label="关闭"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0.5 0.5l9 9M9.5 0.5l-9 9" stroke="currentColor" stroke-width="1.1"/></svg></button>
+</div>
+
+<!-- ———— 连接 ———— -->
+<main class="page on" id="home">
+  <section class="card raised hero">
+    <div class="dev">
+      <div class="avatar">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1f2937" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="3"/><path d="M8 18v1.5M16 18v1.5"/><circle cx="16.5" cy="12" r="0.6" fill="#1f2937"/></svg>
+      </div>
+      <div class="dev-text">
+        <button class="dev-name" id="macBtn" aria-haspopup="dialog">
+          <span id="macName">正在查找 Mac…</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>
+        </button>
+        <span class="dev-sub" id="macSub">&nbsp;</span>
+      </div>
+      <span class="badge" id="badge"><i></i><span id="badgeText">未连接</span></span>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><span class="k">往返</span><span class="v num dim" id="stRtt">—</span></div>
+      <div class="stat"><span class="k">发送</span><span class="v num dim" id="stPps">—</span></div>
+      <div class="stat"><span class="k">麦克风缓冲</span><span class="v num dim" id="stBuf">—</span></div>
+    </div>
+
+    <button class="btn-main go" id="power">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 4v7"/><path d="M7.1 7.6a7 7 0 1 0 9.8 0"/></svg>
+      <span id="powerText">连接</span>
+    </button>
+  </section>
+
+  <section class="card audio">
+    <div class="arow">
+      <div class="ahead">
+        <div class="tile"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10v4h3l4 3.5v-11L8 10H5z"/><path d="M15.5 9.5a3.5 3.5 0 0 1 0 5"/></svg></div>
+        <div class="atext"><span class="atitle">扬声器</span><span class="asub" id="spkSub">未连接</span></div>
+        <span class="adb num" id="spkDb"></span>
+      </div>
+      <div class="segs" id="spkSegs"></div>
+    </div>
+    <div class="arow">
+      <div class="ahead">
+        <div class="tile"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3.5" width="6" height="10.5" rx="3"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V20.5"/></svg></div>
+        <div class="atext">
+          <span class="atitle">麦克风
+            <span class="tag" id="aecTag" hidden><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>回声消除</span>
+          </span>
+          <span class="asub" id="micSub">未连接</span>
+        </div>
+        <span class="adb num" id="micDb"></span>
+      </div>
+      <div class="segs" id="micSegs"></div>
+    </div>
+  </section>
+
+  <button class="note" id="note">
+    <svg id="noteIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a36a" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></svg>
+    <span id="noteText">正在检查设置…</span>
+  </button>
+  <div id="errors"></div>
+</main>
+
+<!-- ———— 录音测试 ———— -->
+<main class="page" id="test">
+  <section class="card section">
+    <div class="card-title">录音回放测试</div>
+    <div class="test-intro">先在 Windows 上放音乐或开着游戏，再开始录音。会录一段应用实际收到的麦克风声音，检查播放的声音有没有从 Studio Display 漏回麦克风。</div>
+    <div class="field">
+      <span>录音时长</span>
+      <div class="segctl" role="radiogroup" aria-label="录音时长" id="secs">
+        <button data-s="5">5 秒</button><button data-s="10" class="on">10 秒</button><button data-s="20">20 秒</button>
+      </div>
+    </div>
+    <button class="btn-main go" id="echoGo">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="5"/></svg>
+      <span>开始录音</span>
+    </button>
+    <div class="help" id="echoHint"></div>
+    <div id="echoLive" hidden>
+      <div class="live">
+        <span>进度</span><div class="bar"><i id="eProg"></i></div>
+        <span>麦克风</span><div class="bar"><i id="eMic"></i></div>
+        <span>播放</span><div class="bar"><i id="eRef"></i></div>
+      </div>
+      <div class="help" id="eProgT" style="margin-top:8px"></div>
+    </div>
+  </section>
+
+  <section class="card section" id="echoResult" hidden>
+    <div class="result-v" id="eVerdict"></div>
+    <div class="result-d" id="eDetail"></div>
+    <div class="kv" id="eKv"></div>
+    <div class="actions">
+      <button class="btn" id="eReveal">打开文件位置</button>
+      <button class="btn primary" id="ePlay">播放录音</button>
+    </div>
+  </section>
+</main>
+
+<!-- ———— 设置 ———— -->
+<main class="page" id="settings">
+  <section class="card section">
+    <div class="card-title"><span class="grow">Mac</span><button class="link" id="rescan2">重新搜索</button></div>
+    <div class="maclist" id="macList2"></div>
+    <label class="field"><span>手动地址</span><input class="input" id="manual2" type="text" placeholder="找不到时填 Mac 的 IP，例如 192.168.1.20"></label>
+  </section>
+
+  <section class="card section">
+    <div class="card-title">声音</div>
+    <label class="field"><span>播放来源</span><select class="select" id="source"></select></label>
+    <div class="field">
+      <span>麦克风</span>
+      <div class="segctl" role="radiogroup" aria-label="麦克风模式" id="micmode">
+        <button data-m="auto">自动</button><button data-m="on">常开</button><button data-m="off">关闭</button>
+      </div>
+      <div class="help" id="micHint"></div>
+    </div>
+    <label class="toggle">
+      <span class="tt">打开 Aurio 时自动连接<small>适合开机自启后直接用</small></span>
+      <span class="switch"><input id="auto" type="checkbox"><span class="track"></span></span>
+    </label>
+    <div class="help" id="lockHint" hidden>连接中不能改播放来源和麦克风模式，先断开再改。</div>
+  </section>
+
+  <section class="card section">
+    <div class="card-title">窗口</div>
+    <div class="field">
+      <span>关闭窗口时</span>
+      <div class="segctl" role="radiogroup" aria-label="关闭窗口时" id="closeAct">
+        <button data-c="ask">每次询问</button><button data-c="tray">最小化到托盘</button><button data-c="quit">退出 Aurio</button>
+      </div>
+      <div class="help" id="closeHint"></div>
+    </div>
+  </section>
+
+  <section class="card section" id="driverCard">
+    <div class="card-title">虚拟声卡驱动</div>
+    <div class="drv-head">
+      <div class="tile"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5"/><path d="M9 2.5v2.5M15 2.5v2.5M9 19v2.5M15 19v2.5M2.5 9h2.5M2.5 15h2.5M19 9h2.5M19 15h2.5"/><path d="M9.5 12h5"/></svg></div>
+      <div class="atext"><span class="atitle">VB-Cable</span><span class="asub" id="drvSub">正在检测…</span></div>
+      <span class="badge" id="drvBadge"><i></i><span id="drvBadgeText">检测中</span></span>
+    </div>
+    <div class="drv-msg run" id="drvRun" hidden><span class="spin"></span><span id="drvStep"></span></div>
+    <div class="drv-msg" id="drvMsg" hidden></div>
+    <div class="confirm" id="drvConfirm" hidden>
+      <span id="drvConfirmText"></span>
+      <div class="actions"><button class="btn" id="drvCancel">取消</button><button class="btn solid-danger" id="drvOk"></button></div>
+    </div>
+    <div class="actions" id="drvActions">
+      <button class="btn" id="drvReboot" hidden>立即重启电脑</button>
+      <button class="btn danger" id="drvUninstall" hidden>卸载驱动</button>
+      <button class="btn primary" id="drvInstall" hidden>安装驱动</button>
+    </div>
+    <div class="fine">麦克风功能需要这个驱动。VB-Cable 由 VB-Audio 开发（vb-cable.com），是捐赠软件。安装时会从官网下载官方安装包并校验签名，点击安装即表示同意它的许可。安装和卸载需要管理员权限，会弹出一次系统确认框。</div>
+  </section>
+
+  <section class="card section">
+    <div class="card-title"><span class="grow">设置检查</span><button class="link" id="recheck">重新检查</button></div>
+    <div id="setup" class="empty">正在检查…</div>
+    <div class="actions">
+      <button class="btn" id="sound">打开声音设置</button>
+      <button class="btn primary" id="fix" hidden>一键修复</button>
+    </div>
+  </section>
+
+  <div class="about">Aurio 0.2.6</div>
+</main>
+
+<nav class="tabs" aria-label="页面">
+  <button class="on" data-page="home">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></svg>连接
+  </button>
+  <button data-page="test">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>录音测试
+  </button>
+  <button data-page="settings">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>设置
+    <span class="dot" id="tabDot"></span>
+  </button>
+</nav>
+
+<!-- ———— 选择 Mac ———— -->
+<div class="scrim" id="scrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="section">
+      <div style="display:flex; align-items:center; gap:8px"><h3 id="sheetTitle">选择 Mac</h3><button class="link" id="rescan">重新搜索</button></div>
+      <div class="maclist" id="macList"></div>
+      <label class="field"><span>手动地址</span><input class="input" id="manual" type="text" placeholder="找不到时填 Mac 的 IP"></label>
+      <div class="actions"><button class="btn primary" id="sheetDone">完成</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ———— 关闭询问 ———— -->
+<div class="scrim" id="closeScrim">
+  <div class="sheet close-sheet" role="dialog" aria-modal="true" aria-labelledby="closeTitle">
+    <div class="section">
+      <div style="display:flex; align-items:center; gap:8px"><h3 id="closeTitle">关闭 Aurio</h3><button class="link" id="closeCancel">取消</button></div>
+      <p>最小化到托盘后，Aurio 会在后台继续传送声音和麦克风；点任务栏右下角的托盘图标可以再打开。</p>
+      <button class="choice primary" id="closeTray">
+        <span class="tile"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2.5"/><path d="M8 21h8M15 13.5h3"/></svg></span>
+        <span class="ct"><b>最小化到托盘</b><small>继续在后台工作</small></span>
+      </button>
+      <button class="choice" id="closeQuit">
+        <span class="tile"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v8"/><path d="M7.2 6.5a7.5 7.5 0 1 0 9.6 0"/></svg></span>
+        <span class="ct"><b>退出 Aurio</b><small>停止传送，关闭程序</small></span>
+      </button>
+      <label class="check"><input type="checkbox" id="closeRemember">记住我的选择，不再询问</label>
+      <div class="help">以后可以在「设置 → 窗口 → 关闭窗口时」修改。</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status"><span id="toastText"></span></div>
+
+<script>
+const T = window.__TAURI__;
+const invoke = T.core.invoke;
+const $ = (id) => document.getElementById(id);
+const SEGS = 32;
+
+let settings = null;
+let macs = [];
+let running = false;
+let busy = false;
+let searching = false;
+let lastStatus = null;
+let setupReport = null;
+let pollTimer = null;
+
+// 电平条：-60..0 dB 映射到 32 格
+for (const id of ['spkSegs', 'micSegs']) $(id).innerHTML = '<i></i>'.repeat(SEGS);
+function setSegs(id, db) {
+  const on = db === null ? 0 : Math.round(Math.max(0, Math.min(1, (db + 60) / 60)) * SEGS);
+  $(id).querySelectorAll('i').forEach((el, i) => el.classList.toggle('on', i < on));
+}
+const pct = (db) => Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+
+// ———— 窗口 ————
+const win = T.window && T.window.getCurrentWindow ? T.window.getCurrentWindow() : null;
+$('minBtn').onclick = () => win && win.minimize();
+$('closeBtn').onclick = () => win && win.close();
+
+function toast(msg) {
+  $('toastText').textContent = msg;
+  $('toast').classList.add('on');
+  clearTimeout(toast.h);
+  toast.h = setTimeout(() => $('toast').classList.remove('on'), 5000);
+}
+
+// ———— 页面 ————
+function showPage(id) {
+  document.querySelectorAll('.page').forEach((p) => p.classList.toggle('on', p.id === id));
+  document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.page === id));
+}
+document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => showPage(b.dataset.page)));
+
+function persist() { invoke('save_settings', { settings }).catch(() => {}); }
+
+// ———— Mac ————
+function currentMac() {
+  if (!settings.engine.dest) return null;
+  return macs.find((m) => m.addr === settings.engine.dest) || null;
+}
+
+function renderMacList(id) {
+  const box = $(id);
+  box.innerHTML = '';
+  if (!macs.length) {
+    const d = document.createElement('div');
+    d.className = 'empty';
+    d.textContent = searching ? '正在局域网里查找…' : '没找到 Mac。确认 Mac 上的 Aurio 已打开（菜单栏有扬声器图标），并且两台电脑在同一个网络。';
+    box.appendChild(d);
+    return;
+  }
+  for (const m of macs) {
+    const b = document.createElement('button');
+    const sel = settings.engine.dest === m.addr;
+    b.className = 'mac' + (sel ? ' sel' : '');
+    b.disabled = running;
+    b.innerHTML = `<span class="check">${sel ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : ''}</span><span class="mt"><span class="mn"></span><span class="mi num"></span></span>`;
+    b.querySelector('.mn').textContent = m.name;
+    b.querySelector('.mi').textContent = m.ips.join(' · ');
+    b.onclick = () => {
+      settings.engine.dest = m.addr;
+      settings.mac_name = m.name;
+      $('manual').value = $('manual2').value = '';
+      persist();
+      renderAll();
+    };
+    box.appendChild(b);
+  }
+}
+
+async function scan() {
+  searching = true;
+  renderAll();
+  try {
+    macs = await invoke('discover_macs');
+    const known = macs.find((m) => m.name === settings.mac_name);
+    if (known) settings.engine.dest = known.addr;
+    else if (!settings.engine.dest && macs.length === 1) {
+      settings.engine.dest = macs[0].addr;
+      settings.mac_name = macs[0].name;
+    }
+    persist();
+  } catch (e) {
+    toast('搜索失败：' + e);
+  }
+  searching = false;
+  renderAll();
+}
+
+function setManual(v) {
+  v = v.trim();
+  if (!v) return;
+  settings.engine.dest = v;
+  settings.mac_name = '';
+  persist();
+  renderAll();
+}
+$('manual').onchange = (e) => setManual(e.target.value);
+$('manual2').onchange = (e) => setManual(e.target.value);
+$('rescan').onclick = scan;
+$('rescan2').onclick = scan;
+$('macBtn').onclick = () => { if (!running) { $('scrim').classList.add('on'); renderAll(); } };
+$('sheetDone').onclick = () => $('scrim').classList.remove('on');
+$('scrim').onclick = (e) => { if (e.target === $('scrim')) $('scrim').classList.remove('on'); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('scrim').classList.remove('on'); });
+
+// ———— 设置检查 ————
+const warnIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c2750a" stroke-width="2" stroke-linecap="round"><path d="M12 4l8.5 15h-17L12 4z"/><path d="M12 10v4M12 16.8v.2"/></svg>';
+async function recheck() {
+  try {
+    const r = await invoke('check_setup');
+    setupReport = r;
+    const sel = $('source');
+    const cur = settings.engine.loopback;
+    const defIsCable = !!r.default_render && !r.render_devices.includes(r.default_render);
+    sel.innerHTML = '';
+    const def = document.createElement('option');
+    def.value = '';
+    def.textContent = defIsCable ? '系统默认（现在是虚拟线，不能用）' : `系统默认 · ${r.default_render || '无'}`;
+    def.disabled = defIsCable;
+    sel.appendChild(def);
+    for (const n of r.render_devices) {
+      const o = document.createElement('option');
+      o.value = n; o.textContent = n;
+      sel.appendChild(o);
+    }
+    if (r.render_devices.includes(cur)) sel.value = cur;
+    else if (defIsCable && r.suggested_playback) sel.value = r.suggested_playback;
+    else sel.value = '';
+    if (sel.value !== cur) { settings.engine.loopback = sel.value; persist(); }
+
+    const box = $('setup');
+    $('fix').hidden = !r.fixable;
+    $('fix').title = r.suggested_playback ? `默认播放设备会改成「${r.suggested_playback}」` : '';
+    box.className = '';
+    if (!r.todo.length) {
+      box.innerHTML = '<div class="allgood"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a36a" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></svg>设置都没问题</div>';
+    } else {
+      box.innerHTML = '<ul class="checklist"></ul>';
+      for (const t of r.todo) {
+        const li = document.createElement('li');
+        li.innerHTML = warnIcon + '<span></span>';
+        li.querySelector('span').textContent = t;
+        box.firstChild.appendChild(li);
+      }
+    }
+  } catch (e) {
+    $('setup').className = 'empty';
+    $('setup').textContent = '检查失败：' + e;
+  }
+  renderAll();
+}
+$('recheck').onclick = recheck;
+$('sound').onclick = () => invoke('open_sound_settings');
+$('fix').onclick = async () => {
+  $('fix').disabled = true;
+  try {
+    const done = await invoke('fix_setup', { playback: $('source').value });
+    if (done.length) { settings.engine.loopback = ''; persist(); toast(done.join('；')); }
+    await recheck();
+  } catch (e) {
+    toast('修复失败：' + e);
+  }
+  $('fix').disabled = false;
+};
+$('note').onclick = () => { if (setupReport && setupReport.todo.length) showPage('settings'); };
+
+// ———— 选项 ————
+$('source').onchange = () => { settings.engine.loopback = $('source').value; persist(); renderAll(); };
+document.querySelectorAll('#micmode button').forEach((b) => (b.onclick = () => { settings.engine.mic_mode = b.dataset.m; persist(); renderAll(); }));
+$('auto').onchange = () => { settings.auto_connect = $('auto').checked; persist(); };
+document.querySelectorAll('#closeAct button').forEach((b) => (b.onclick = () => { settings.close_action = b.dataset.c; persist(); renderAll(); }));
+
+// ———— 关闭询问 ————
+function closeAction() { return ['tray', 'quit'].includes(settings && settings.close_action) ? settings.close_action : 'ask'; }
+function openCloseAsk() {
+  $('closeRemember').checked = false;
+  $('closeScrim').classList.add('on');
+  $('closeTray').focus();
+}
+function hideCloseAsk() { $('closeScrim').classList.remove('on'); }
+function chooseClose(action) {
+  const remember = $('closeRemember').checked;
+  if (remember) settings.close_action = action;   // 本地也改，免得之后保存设置时把它冲掉
+  hideCloseAsk();
+  renderAll();
+  invoke('close_window', { action, remember }).catch(() => {});
+}
+$('closeTray').onclick = () => chooseClose('tray');
+$('closeCancel').onclick = hideCloseAsk;
+$('closeQuit').onclick = () => chooseClose('quit');
+$('closeScrim').onclick = (e) => { if (e.target === $('closeScrim')) hideCloseAsk(); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideCloseAsk(); });
+if (T.event) T.event.listen('close-requested', openCloseAsk);
+
+// ———— 连接 ————
+async function toggle() {
+  if (busy) return;
+  if (!running && !settings.engine.dest) { toast('先选一台 Mac'); $('macBtn').click(); return; }
+  busy = true;
+  renderAll();
+  try {
+    if (running) {
+      await invoke('stop');
+      running = false;
+      lastStatus = null;
+      recheck();
+    } else {
+      await invoke('start', { settings });
+      running = true;
+      await poll();
+    }
+  } catch (e) {
+    toast('没能连接：' + e);
+  } finally {
+    busy = false;
+    clearInterval(pollTimer);
+    if (running) pollTimer = setInterval(poll, 500);
+    renderAll();
+  }
+}
+$('power').onclick = toggle;
+
+async function poll() {
+  const s = await invoke('status').catch(() => null);
+  if (s) { lastStatus = s; renderAll(); }
+}
+
+// ———— 渲染 ————
+function sourceName() {
+  if (settings.engine.loopback) return settings.engine.loopback;
+  return setupReport && setupReport.default_render ? setupReport.default_render : '系统默认';
+}
+
+function renderAll() {
+  if (!settings) return;
+  const s = running ? lastStatus : null;
+  const m = currentMac();
+  const host = settings.engine.dest ? settings.engine.dest.replace(/:47800$/, '') : '';
+
+  // 设备
+  $('macName').textContent = m ? m.name : (settings.engine.dest ? (settings.mac_name || host) : (searching ? '正在查找 Mac…' : '选择 Mac'));
+  $('macSub').textContent = !settings.engine.dest ? (macs.length ? '点名字选择一台' : '没找到，可在设置里填 IP') : `${host} · ${m ? '自动发现' : '手动地址'}`;
+  $('macBtn').disabled = running;
+
+  // 状态胶囊
+  const badge = $('badge');
+  badge.className = 'badge';
+  let bt = '未连接';
+  if (busy) { badge.classList.add('busy'); bt = running ? '正在断开' : '正在连接'; }
+  else if (s) {
+    if (s.peer.responding) { badge.classList.add('ok'); bt = '已连接'; }
+    else { badge.classList.add('warn'); bt = 'Mac 没有响应'; }
+  }
+  $('badgeText').textContent = bt;
+
+  // 指标
+  const setStat = (id, val, unit) => {
+    const el = $(id);
+    el.classList.toggle('dim', val === null);
+    el.innerHTML = val === null ? '—' : `${val}<small>${unit}</small>`;
+  };
+  setStat('stRtt', s && s.peer.responding ? s.peer.rtt_ms.toFixed(1) : null, 'ms');
+  setStat('stPps', s ? String(s.playback.packets_per_s) : null, '包/秒');
+  setStat('stBuf', s && s.mic.available && s.mic.state === '播放' ? s.mic.fill_ms.toFixed(1) : null, 'ms');
+
+  // 按钮
+  const p = $('power');
+  p.className = 'btn-main ' + (running ? 'stop' : 'go');
+  p.disabled = busy;
+  $('powerText').textContent = busy ? (running ? '正在断开…' : '正在连接…') : (running ? '断开连接' : '连接');
+
+  // 扬声器
+  if (s) {
+    const db = s.playback.peak_db;
+    $('spkSub').textContent = s.peer.responding ? 'Studio Display' : '等待 Mac 响应';
+    $('spkDb').textContent = db > -80 ? `${db.toFixed(0)} dB` : '无声音';
+    setSegs('spkSegs', db > -80 ? db : null);
+  } else {
+    $('spkSub').textContent = '未连接';
+    $('spkDb').textContent = '';
+    setSegs('spkSegs', null);
+  }
+
+  // 麦克风
+  $('aecTag').hidden = !(s && s.peer.mac_echo_cancel);
+  if (s) {
+    const mic = s.mic;
+    let sub, db = null;
+    if (!mic.available) sub = mic.mode === '关闭' ? '已关闭' : '不可用 · 到「设置」安装虚拟声卡驱动';
+    else if (!mic.requested) sub = mic.mode === '常开' ? '常开 · 等待数据' : '没有应用在使用';
+    else if (mic.state === '播放') { sub = '有应用正在使用'; db = mic.peak_db; }
+    else sub = '正在打开 Mac 的麦克风…';
+    $('micSub').textContent = sub;
+    $('micDb').textContent = db !== null ? `${db.toFixed(0)} dB` : '';
+    setSegs('micSegs', db);
+  } else {
+    $('micSub').textContent = '未连接';
+    $('micDb').textContent = '';
+    setSegs('micSegs', null);
+  }
+
+  // 提示行
+  const todo = setupReport ? setupReport.todo.length : -1;
+  const note = $('note');
+  note.classList.toggle('warn', todo > 0);
+  note.disabled = !(todo > 0);
+  $('noteIcon').outerHTML = todo > 0
+    ? '<svg id="noteIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c2750a" stroke-width="2" stroke-linecap="round"><path d="M12 4l8.5 15h-17L12 4z"/><path d="M12 10v4M12 16.8v.2"/></svg>'
+    : '<svg id="noteIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a36a" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></svg>';
+  $('noteText').innerHTML = '';
+  if (todo < 0) $('noteText').textContent = '正在检查设置…';
+  else if (todo > 0) $('noteText').textContent = `有 ${todo} 项设置需要处理，点这里查看`;
+  else {
+    const a = document.createElement('span'); a.textContent = '设置都没问题';
+    const sep = document.createElement('span'); sep.className = 'sep'; sep.textContent = ' · ';
+    const b = document.createElement('span'); b.textContent = '播放来源 ' + sourceName();
+    $('noteText').append(a, sep, b);
+  }
+  $('tabDot').style.display = todo > 0 ? 'block' : 'none';
+
+  const errs = $('errors');
+  errs.innerHTML = '';
+  for (const e of (s ? s.errors : [])) {
+    const d = document.createElement('div');
+    d.className = 'alert';
+    d.textContent = e;
+    errs.appendChild(d);
+  }
+
+  // 设置页
+  renderMacList('macList2');
+  if ($('scrim').classList.contains('on')) renderMacList('macList');
+  $('rescan').disabled = $('rescan2').disabled = searching;
+  document.querySelectorAll('#micmode button').forEach((b) => {
+    b.classList.toggle('on', b.dataset.m === (settings.engine.mic_mode || 'auto'));
+    b.disabled = running;
+  });
+  $('micHint').textContent = {
+    auto: '有应用开始录音时，自动打开 Mac 的麦克风；停止后约 3 秒关闭。',
+    on: '一直从 Mac 收麦克风。',
+    off: '不使用麦克风。',
+  }[settings.engine.mic_mode || 'auto'];
+  $('source').disabled = $('manual2').disabled = running;
+  $('lockHint').hidden = !running;
+  $('auto').checked = !!settings.auto_connect;
+  document.querySelectorAll('#closeAct button').forEach((b) => {
+    const on = b.dataset.c === closeAction();
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+    b.setAttribute('role', 'radio');
+  });
+  $('closeHint').textContent = {
+    ask: '每次关闭时问一下：缩到托盘还是退出。',
+    tray: '关闭后缩到任务栏右下角的托盘，继续在后台工作。退出请右键托盘图标 →「退出 Aurio」。',
+    quit: '关闭窗口就退出 Aurio，停止传送声音和麦克风。',
+  }[closeAction()];
+
+  // 录音测试
+  if (!echoTimer) {
+    $('echoGo').disabled = !running;
+    $('echoHint').textContent = running ? '' : '先在「连接」页连上 Mac。';
+  }
+}
+
+// ———— 录音回放测试 ————
+let echoTimer = null;
+let echoPath = '';
+let echoSecs = 10;
+document.querySelectorAll('#secs button').forEach((b) => (b.onclick = () => {
+  echoSecs = Number(b.dataset.s);
+  document.querySelectorAll('#secs button').forEach((x) => x.classList.toggle('on', x === b));
+}));
+
+async function echoStart() {
+  $('echoGo').disabled = true;
+  $('echoResult').hidden = true;
+  try {
+    await invoke('echo_test_start', { seconds: echoSecs });
+    $('echoLive').hidden = false;
+    clearInterval(echoTimer);
+    echoTimer = setInterval(echoPoll, 150);
+  } catch (e) {
+    toast(String(e));
+    renderAll();
+  }
+}
+
+function kv(items) {
+  $('eKv').innerHTML = '';
+  for (const [k, v] of items) {
+    const d = document.createElement('div');
+    const a = document.createElement('span'); a.textContent = k;
+    const b = document.createElement('b'); b.className = 'num'; b.textContent = v;
+    d.append(a, b);
+    $('eKv').appendChild(d);
+  }
+}
+
+async function echoPoll() {
+  const p = await invoke('echo_test_progress').catch(() => null);
+  if (!p) return;
+  const total = p.total_s || 1;
+  $('eProg').style.width = (p.phase === '录音' ? Math.min(100, p.elapsed_s / total * 100) : p.phase === '准备' ? 0 : 100) + '%';
+  $('eProgT').textContent = p.phase === '准备' ? '等待 Mac 打开麦克风…'
+    : p.phase === '录音' ? `录音中 · ${p.elapsed_s.toFixed(1)} / ${total} 秒`
+    : p.phase === '分析' ? '分析中…' : '';
+  $('eMic').style.width = pct(p.mic_db) + '%';
+  $('eRef').style.width = pct(p.ref_db) + '%';
+  $('ePlay').textContent = p.playing ? '停止播放' : '播放录音';
+
+  if (p.phase === '完成' || p.phase === '出错') {
+    if (!p.playing) { clearInterval(echoTimer); echoTimer = null; }
+    $('echoLive').hidden = true;
+    renderAll();
+    if (p.error && p.phase === '出错') { toast(p.error); return; }
+    const r = p.result;
+    if (!r) return;
+    $('echoResult').hidden = false;
+    const none = r.verdict.startsWith('基本没有');
+    const hasEcho = r.verdict.startsWith('有轻微') || r.verdict.startsWith('回声明显');
+    const color = none ? '#16a36a' : hasEcho && r.verdict.startsWith('回声明显') ? '#d6402e' : '#c2750a';
+    $('eVerdict').innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round">${none ? '<circle cx="12" cy="12" r="9"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/>' : '<path d="M12 4l8.5 15h-17L12 4z"/><path d="M12 10v4M12 16.8v.2"/>'}</svg><span></span>`;
+    $('eVerdict').querySelector('span').textContent = r.verdict;
+    $('eDetail').textContent = r.detail;
+    const items = [['麦克风电平', `${r.mic_rms_db.toFixed(0)} dB`], ['播放电平', `${r.ref_rms_db.toFixed(0)} dB`]];
+    if (hasEcho) items.unshift(['回声延迟', `${r.delay_ms.toFixed(0)} ms`], ['回声强度', `${r.echo_db.toFixed(1)} dB · ${r.echo_share_pct.toFixed(0)}%`]);
+    kv(items);
+    echoPath = r.wav_path;
+    $('eReveal').hidden = !echoPath;
+    if (p.error) toast(p.error);
+  }
+}
+
+$('echoGo').onclick = echoStart;
+$('ePlay').onclick = async () => {
+  const p = await invoke('echo_test_progress').catch(() => null);
+  try {
+    if (p && p.playing) await invoke('echo_test_stop_play');
+    else {
+      await invoke('echo_test_play');
+      clearInterval(echoTimer);
+      echoTimer = setInterval(echoPoll, 150);
+    }
+  } catch (e) { toast(String(e)); }
+};
+$('eReveal').onclick = () => echoPath && invoke('reveal_file', { path: echoPath });
+
+// ———— 驱动 ————
+let drvStatus = null;
+let drvTimer = null;
+let drvConfirm = null; // 'uninstall' | 'reboot'
+const okIcon = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/></svg>';
+const errIcon = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.3v.2"/></svg>';
+
+async function loadDriver() {
+  try { drvStatus = await invoke('driver_status'); } catch (e) { drvStatus = null; }
+  renderDriver(null);
+}
+
+function renderDriver(job) {
+  const busy = job && !job.done;
+  const st = drvStatus;
+  $('drvSub').textContent = !st ? '正在检测…' : st.installed ? `已安装 · ${st.cable_in.replace(' (VB-Audio Virtual Cable)', '')} / ${st.cable_out.replace(' (VB-Audio Virtual Cable)', '')}` : '未安装 · 麦克风功能需要它';
+  const b = $('drvBadge');
+  b.className = 'badge' + (busy ? ' busy' : st && st.installed ? ' ok' : '');
+  $('drvBadgeText').textContent = busy ? (job.kind === 'install' ? '安装中' : '卸载中') : !st ? '检测中' : st.installed ? '已安装' : '未安装';
+
+  $('drvRun').hidden = !busy;
+  if (busy) $('drvStep').textContent = job.step || '准备中…';
+
+  const msg = $('drvMsg');
+  if (job && job.done && job.message) {
+    msg.hidden = false;
+    msg.className = 'drv-msg ' + (job.ok ? 'ok' : 'err');
+    msg.innerHTML = (job.ok ? okIcon : errIcon) + '<span></span>';
+    msg.querySelector('span').textContent = job.message;
+  } else if (!job) {
+    msg.hidden = true;
+  }
+
+  $('drvConfirm').hidden = !drvConfirm || busy;
+  if (drvConfirm === 'uninstall') {
+    $('drvConfirmText').textContent = '卸载后麦克风功能就不能用了。会删除 VB-Cable 的设备和驱动文件，确定吗？';
+    $('drvOk').textContent = '确认卸载';
+  } else if (drvConfirm === 'reboot') {
+    $('drvConfirmText').textContent = '电脑会在 5 秒后重启，先保存好其他程序里的内容。';
+    $('drvOk').textContent = '重启';
+  }
+  const showActions = !busy && !drvConfirm;
+  $('drvActions').hidden = !showActions;
+  $('drvInstall').hidden = !(st && !st.installed);
+  $('drvUninstall').hidden = !(st && st.installed);
+  $('drvReboot').hidden = !(job && job.done && job.needs_reboot);
+}
+
+async function driverAction(action) {
+  drvConfirm = null;
+  try {
+    await invoke('driver_action', { action, playback: $('source').value });
+    if (running) { running = false; lastStatus = null; clearInterval(pollTimer); renderAll(); }
+    clearInterval(drvTimer);
+    drvTimer = setInterval(driverPoll, 400);
+    driverPoll();
+  } catch (e) {
+    toast(String(e));
+  }
+}
+
+async function driverPoll() {
+  const job = await invoke('driver_progress').catch(() => null);
+  if (!job) return;
+  renderDriver(job);
+  if (job.done) {
+    clearInterval(drvTimer);
+    drvTimer = null;
+    await loadDriver();
+    renderDriver(job);
+    recheck();
+  }
+}
+
+$('drvInstall').onclick = () => driverAction('install');
+$('drvUninstall').onclick = () => { drvConfirm = 'uninstall'; renderDriver(null); };
+$('drvReboot').onclick = () => { drvConfirm = 'reboot'; renderDriver(null); };
+$('drvCancel').onclick = () => { drvConfirm = null; renderDriver(null); };
+$('drvOk').onclick = async () => {
+  const what = drvConfirm;
+  if (what === 'uninstall') return driverAction('uninstall');
+  drvConfirm = null;
+  renderDriver(null);
+  try { await invoke('restart_computer'); toast('电脑将在 5 秒后重启'); } catch (e) { toast(String(e)); }
+};
+
+// ———— 启动 ————
+(async () => {
+  settings = await invoke('get_settings');
+  if (settings.engine.dest && !settings.mac_name) $('manual').value = $('manual2').value = settings.engine.dest;
+  renderAll();
+  loadDriver();
+  await recheck();
+  await scan();
+  if (settings.auto_connect && settings.engine.dest) toggle();
+})();
+</script>
+</body>
+</html>

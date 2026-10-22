@@ -1,0 +1,16 @@
+/target
+/mac/*/.build
+.DS_Store
+*.wav
+/dist
+/vendor
+
+# 签名证书和密钥绝不提交
+*.p12
+*.p8
+*.cer
+*.mobileprovision
+
+# 本机工具和编辑器配置
+/.spec-workflow
+/.vscode

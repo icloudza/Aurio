@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["crates/aurio-core", "crates/aurio-ffi", "crates/aurio-tools", "crates/aurio-win", "apps/win-tauri"]
+# Tauri 应用只给 Windows 编：scripts/build-win.sh
+default-members = ["crates/aurio-core", "crates/aurio-ffi", "crates/aurio-tools", "crates/aurio-win"]
+
+[workspace.package]
+version = "0.2.6"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+rtrb = "0.4"
+
+[profile.release]
+debug = 1
+panic = "abort"
+lto = "thin"

@@ -1,0 +1,6 @@
+# 在 Mac 上交叉编译 Windows 版（brew install mingw-w64）
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-ar"
+# 静态链接 MinGW 运行库，exe 不依赖 libgcc / libwinpthread 的 DLL
+rustflags = ["-C", "target-feature=+crt-static"]

@@ -1,0 +1,8 @@
+[package]
+name = "aurio-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rtrb.workspace = true
+socket2 = { version = "0.6", features = ["all"] }

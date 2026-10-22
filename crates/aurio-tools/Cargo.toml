@@ -1,0 +1,9 @@
+[package]
+name = "aurio-tools"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aurio-core = { path = "../aurio-core" }
+hound = "3.5"
+rtrb.workspace = true

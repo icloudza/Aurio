@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>zh_CN</string>
+	<key>CFBundleExecutable</key>
+	<string>Aurio</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.aurio.mac</string>
+	<key>CFBundleName</key>
+	<string>Aurio</string>
+	<key>CFBundleDisplayName</key>
+	<string>Aurio</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.2.6</string>
+	<key>CFBundleVersion</key>
+	<string>0.2.6</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Windows 上有应用使用麦克风时，Aurio 会把 Studio Display 的麦克风声音发送给那台电脑。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Aurio 需要在局域网内接收 Windows 发来的音频，并让 Windows 自动发现这台 Mac。</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_aurio._udp</string>
+	</array>
+</dict>
+</plist>

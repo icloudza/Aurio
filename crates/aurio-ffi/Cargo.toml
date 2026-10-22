@@ -1,0 +1,10 @@
+[package]
+name = "aurio-ffi"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+aurio-core = { path = "../aurio-core" }

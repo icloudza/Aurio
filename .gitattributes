@@ -1,0 +1,15 @@
+# 换行符：仓库里统一存 LF，检出时按文件用途决定
+* text=auto
+
+# Windows 安装包里显示的许可协议，需要 CRLF 才能正确换行
+installer/license.txt text eol=crlf
+
+# 脚本在 Linux / macOS 的 CI 上运行，必须是 LF
+*.sh text eol=lf
+
+# 二进制资源
+*.png binary
+*.tiff binary
+*.ico binary
+*.icns binary
+*.rgba binary

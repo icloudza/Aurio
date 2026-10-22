@@ -1,0 +1,18 @@
+[package]
+name = "aurio-win-app"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "Aurio"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["custom-protocol", "tray-icon"] }
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+aurio-win = { path = "../../crates/aurio-win" }

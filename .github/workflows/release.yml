@@ -1,0 +1,205 @@
+# 打包 Windows 安装包和 macOS 安装盘。
+#
+# - 推送 v* 标签（例如 v0.2.6）：打包、签名、公证，并创建 GitHub Release 草稿
+# - 手动运行（Actions → 打包发布 → Run workflow）：只打包，产物在本次运行的 Artifacts 里
+#
+# macOS 签名和公证需要的 Secrets 见 docs/RELEASE.md，可以用 scripts/setup-ci-secrets.sh 一次配置。
+# 没有配置时，macOS 版仍会打包，但只做临时签名、不公证。
+name: 打包发布
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    name: 检查版本号
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 读取并核对版本号
+        id: v
+        run: |
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          echo "版本号：$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fail() { echo "::error::$1"; exit 1; }
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            fail "标签 $GITHUB_REF_NAME 和 Cargo.toml 里的版本 $VERSION 不一致"
+          fi
+          TAURI=$(python3 -c 'import json; print(json.load(open("apps/win-tauri/tauri.conf.json"))["version"])')
+          PLIST=$(python3 -c 'import plistlib; print(plistlib.load(open("mac/AurioMac/App/Info.plist", "rb"))["CFBundleShortVersionString"])')
+          [ "$TAURI" = "$VERSION" ] || fail "tauri.conf.json 里的版本是 $TAURI，应为 $VERSION"
+          [ "$PLIST" = "$VERSION" ] || fail "Info.plist 里的版本是 $PLIST，应为 $VERSION"
+          grep -q "Aurio $VERSION<" apps/win-tauri/ui/index.html || fail "index.html 设置页的版本号不是 $VERSION"
+
+  test:
+    name: 核心库测试
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: core-test
+      - name: 单元测试
+        run: cargo test --release -p aurio-core
+
+  windows:
+    name: Windows 安装包
+    needs: [version, test]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装交叉编译工具
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends mingw-w64 nsis zip
+
+      - name: 安装 Rust 1.91.0（Tauri 需要 1.90+）
+        run: rustup toolchain install 1.91.0 --profile minimal --target x86_64-pc-windows-gnu
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-gnu
+
+      - name: 编译并打包
+        env:
+          NSIS_LOCALE: C.UTF-8
+        run: |
+          ./scripts/build-win.sh
+          mv dist/Aurio-Windows.zip "dist/Aurio-${{ needs.version.outputs.version }}-Windows.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Aurio-Windows
+          path: |
+            dist/Aurio-Setup-*.exe
+            dist/Aurio-*-Windows.zip
+          if-no-files-found: error
+
+  macos:
+    name: macOS 安装盘
+    needs: [version, test]
+    runs-on: macos-15
+    env:
+      HAS_CERT: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+      HAS_NOTARY: ${{ secrets.APPLE_API_KEY_P8 != '' && secrets.APPLE_API_KEY_ID != '' && secrets.APPLE_API_ISSUER_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: macos
+
+      - name: 安装 dmgbuild
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet dmgbuild==1.6.7
+          echo "DMGBUILD=$RUNNER_TEMP/venv/bin/dmgbuild" >> "$GITHUB_ENV"
+
+      - name: 导入签名证书
+        if: env.HAS_CERT == 'true'
+        env:
+          P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          printf '%s' "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          # Developer ID 中间证书（G2），保证签名证书链完整
+          curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$RUNNER_TEMP/DeveloperIDG2CA.cer"
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$KEYCHAIN" || true
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          # 把新钥匙串加到搜索列表最前面，保留原有的
+          security list-keychains -d user | tr -d '"' | xargs security list-keychains -d user -s "$KEYCHAIN"
+          echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+          security find-identity -v -p codesigning "$KEYCHAIN" | grep -q "Developer ID Application" \
+            || { echo "::error::证书里没有 Developer ID Application 身份"; exit 1; }
+
+      - name: 准备公证密钥
+        if: env.HAS_NOTARY == 'true'
+        env:
+          P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          printf '%s\n' "$P8" > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+          echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: 编译、签名、生成安装盘并公证
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          if [ "$HAS_NOTARY" != true ]; then unset APPLE_API_KEY_ID APPLE_API_ISSUER_ID; fi
+          ./scripts/build-mac-dmg.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Aurio-macOS
+          path: dist/Aurio-*.dmg
+          if-no-files-found: error
+
+      - name: 清理钥匙串和密钥
+        if: always()
+        run: |
+          [ -n "${KEYCHAIN:-}" ] && security delete-keychain "$KEYCHAIN" || true
+          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/cert.p12"
+
+  release:
+    name: 创建 GitHub Release 草稿
+    needs: [version, windows, macos]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: 生成校验和与更新说明
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          (cd dist && sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          # 取 CHANGELOG.md 里本版本的那一节
+          python3 - <<'EOF'
+          import os, re
+          v = os.environ["VERSION"]
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(r"^## \[" + re.escape(v) + r"\].*?$(.*?)(?=^## \[|\Z)", text, re.M | re.S)
+          notes = m.group(1).strip() if m else f"Aurio {v}"
+          open("notes.md", "w", encoding="utf-8").write(notes + "\n")
+          EOF
+
+      - name: 上传到 Release（草稿，确认后手动发布）
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --draft --title "Aurio $VERSION" --notes-file notes.md
+          fi
